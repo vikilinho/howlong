@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/storage/isar_models.dart';
@@ -17,6 +18,7 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   int _currentIndex = 0;
+  bool _isScrolling = false;
 
   @override
   Widget build(BuildContext context) {
@@ -28,30 +30,33 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       backgroundColor: AppColors.background,
       body: SafeArea(
         bottom: false,
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(24, 18, 24, 116),
-          physics: const BouncingScrollPhysics(),
-          children: [
-            Center(
-              child: Text(
-                'HowLong',
-                style: AppTextStyles.headingLarge.copyWith(
-                  fontWeight: FontWeight.w800,
+        child: NotificationListener<ScrollNotification>(
+          onNotification: _handleScrollNotification,
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(24, 18, 24, 116),
+            physics: const BouncingScrollPhysics(),
+            children: [
+              Center(
+                child: Text(
+                  'HowLong',
+                  style: AppTextStyles.headingLarge.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 34),
-            ...switch (_currentIndex) {
-              0 => _todayTab(context, events, habits, checkIns),
-              1 => _eventsTab(context, events),
-              _ => _habitsTab(context, habits, checkIns),
-            },
-          ].animate(interval: 45.ms).fadeIn(duration: 200.ms).slideY(
-                begin: 0.02,
-                end: 0,
-                duration: 200.ms,
-                curve: Curves.easeOutCubic,
-              ),
+              const SizedBox(height: 34),
+              ...switch (_currentIndex) {
+                0 => _todayTab(context, events, habits, checkIns),
+                1 => _eventsTab(context, events),
+                _ => _habitsTab(context, habits, checkIns),
+              },
+            ].animate(interval: 45.ms).fadeIn(duration: 200.ms).slideY(
+                  begin: 0.02,
+                  end: 0,
+                  duration: 200.ms,
+                  curve: Curves.easeOutCubic,
+                ),
+          ),
         ),
       ),
       bottomNavigationBar: NavigationBar(
@@ -88,6 +93,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
+  bool _handleScrollNotification(ScrollNotification notification) {
+    if (notification is ScrollUpdateNotification ||
+        notification is OverscrollNotification) {
+      if (!_isScrolling) {
+        setState(() => _isScrolling = true);
+      }
+    } else if (notification is ScrollEndNotification && _isScrolling) {
+      setState(() => _isScrolling = false);
+    }
+    return false;
+  }
+
   List<Widget> _todayTab(
     BuildContext context,
     AsyncValue<List<TrackedEvent>> events,
@@ -121,7 +138,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       _EventsList(
         events: events,
         limit: 3,
+        isScrolling: _isScrolling,
+        onOpen: _openEvent,
         onLogNow: _logEventNow,
+        onDelete: _deleteEvent,
       ),
       const SizedBox(height: 36),
       _AddRow(
@@ -133,9 +153,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         habits: habits,
         checkIns: checkIns,
         limit: 4,
+        isScrolling: _isScrolling,
+        onOpen: _openHabit,
         hasCheckedInToday: _hasCheckedInToday,
         streakLabel: _streakLabel,
         onCheckIn: _checkInHabit,
+        onDelete: _deleteHabit,
       ),
     ];
   }
@@ -165,7 +188,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       const SizedBox(height: 30),
       _EventsList(
         events: events,
+        isScrolling: _isScrolling,
+        onOpen: _openEvent,
         onLogNow: _logEventNow,
+        onDelete: _deleteEvent,
       ),
     ];
   }
@@ -197,9 +223,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       _HabitsList(
         habits: habits,
         checkIns: checkIns,
+        isScrolling: _isScrolling,
+        onOpen: _openHabit,
         hasCheckedInToday: _hasCheckedInToday,
         streakLabel: _streakLabel,
         onCheckIn: _checkInHabit,
+        onDelete: _deleteHabit,
       ),
     ];
   }
@@ -209,9 +238,27 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     await repository.logNow(event);
   }
 
+  void _openEvent(TrackedEvent event) {
+    context.push('/events/${event.id}');
+  }
+
+  void _openHabit(TrackedHabit habit) {
+    context.push('/habits/${habit.id}');
+  }
+
+  Future<void> _deleteEvent(TrackedEvent event) async {
+    final repository = await ref.read(eventsRepositoryProvider.future);
+    await repository.deleteEvent(event.id);
+  }
+
   Future<void> _checkInHabit(TrackedHabit habit) async {
     final repository = await ref.read(habitsRepositoryProvider.future);
     await repository.checkInToday(habit);
+  }
+
+  Future<void> _deleteHabit(TrackedHabit habit) async {
+    final repository = await ref.read(habitsRepositoryProvider.future);
+    await repository.deleteHabit(habit.id);
   }
 
   bool _hasCheckedInToday(TrackedHabit habit, List<HabitCheckIn> checkIns) {
@@ -286,11 +333,17 @@ class _AddRow extends StatelessWidget {
 class _EventsList extends StatelessWidget {
   final AsyncValue<List<TrackedEvent>> events;
   final int? limit;
+  final bool isScrolling;
+  final void Function(TrackedEvent event) onOpen;
   final Future<void> Function(TrackedEvent event) onLogNow;
+  final Future<void> Function(TrackedEvent event) onDelete;
 
   const _EventsList({
     required this.events,
+    required this.isScrolling,
+    required this.onOpen,
     required this.onLogNow,
+    required this.onDelete,
     this.limit,
   });
 
@@ -306,13 +359,18 @@ class _EventsList extends StatelessWidget {
           );
         }
 
-        final visibleItems = limit == null ? items : items.take(limit!);
+        final visibleItems =
+            (limit == null ? items : items.take(limit!)).toList();
         return Column(
           children: [
-            for (final event in visibleItems) ...[
+            for (var index = 0; index < visibleItems.length; index++) ...[
               _SinceCard(
-                event: event,
-                onLogNow: () => onLogNow(event),
+                event: visibleItems[index],
+                animationIndex: index,
+                isScrolling: isScrolling,
+                onOpen: () => onOpen(visibleItems[index]),
+                onLogNow: () => onLogNow(visibleItems[index]),
+                onDelete: () => onDelete(visibleItems[index]),
               ),
               const SizedBox(height: 12),
             ],
@@ -329,18 +387,24 @@ class _HabitsList extends StatelessWidget {
   final AsyncValue<List<TrackedHabit>> habits;
   final AsyncValue<List<HabitCheckIn>> checkIns;
   final int? limit;
+  final bool isScrolling;
+  final void Function(TrackedHabit habit) onOpen;
   final bool Function(TrackedHabit habit, List<HabitCheckIn> checkIns)
       hasCheckedInToday;
   final String Function(TrackedHabit habit, List<HabitCheckIn> checkIns)
       streakLabel;
   final Future<void> Function(TrackedHabit habit) onCheckIn;
+  final Future<void> Function(TrackedHabit habit) onDelete;
 
   const _HabitsList({
     required this.habits,
     required this.checkIns,
+    required this.isScrolling,
+    required this.onOpen,
     required this.hasCheckedInToday,
     required this.streakLabel,
     required this.onCheckIn,
+    required this.onDelete,
     this.limit,
   });
 
@@ -357,15 +421,20 @@ class _HabitsList extends StatelessWidget {
           );
         }
 
-        final visibleItems = limit == null ? items : items.take(limit!);
+        final visibleItems =
+            (limit == null ? items : items.take(limit!)).toList();
         return Column(
           children: [
-            for (final habit in visibleItems) ...[
+            for (var index = 0; index < visibleItems.length; index++) ...[
               _HabitCard(
-                habit: habit,
-                completed: hasCheckedInToday(habit, logs),
-                streakLabel: streakLabel(habit, logs),
-                onCheckIn: () => onCheckIn(habit),
+                habit: visibleItems[index],
+                animationIndex: index,
+                isScrolling: isScrolling,
+                onOpen: () => onOpen(visibleItems[index]),
+                completed: hasCheckedInToday(visibleItems[index], logs),
+                streakLabel: streakLabel(visibleItems[index], logs),
+                onCheckIn: () => onCheckIn(visibleItems[index]),
+                onDelete: () => onDelete(visibleItems[index]),
               ),
               const SizedBox(height: 12),
             ],
@@ -380,11 +449,19 @@ class _HabitsList extends StatelessWidget {
 
 class _SinceCard extends StatelessWidget {
   final TrackedEvent event;
+  final int animationIndex;
+  final bool isScrolling;
+  final VoidCallback onOpen;
   final VoidCallback onLogNow;
+  final VoidCallback onDelete;
 
   const _SinceCard({
     required this.event,
+    required this.animationIndex,
+    required this.isScrolling,
+    required this.onOpen,
     required this.onLogNow,
+    required this.onDelete,
   });
 
   @override
@@ -395,74 +472,114 @@ class _SinceCard extends StatelessWidget {
         reminderDuration != null && elapsedDuration > reminderDuration;
     final elapsed = _elapsedLabel(event.lastPerformedAt);
 
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        border: Border.all(
-          color: isOverdue
-              ? AppColors.error.withValues(alpha: 0.35)
-              : AppColors.divider,
-        ),
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    return Slidable(
+      key: ValueKey(event.id),
+      endActionPane: ActionPane(
+        motion: const DrawerMotion(),
+        extentRatio: 0.25,
         children: [
-          Row(
-            children: [
-              _IconBadge(icon: icon),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Text(
-                  event.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.headingMedium.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              FilledButton(
-                onPressed: onLogNow,
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size(58, 34),
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  textStyle: AppTextStyles.labelMedium.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                child: const Text('Log'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Text(
-            elapsed,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: AppTextStyles.displayMedium.copyWith(
-              color: isOverdue ? AppColors.error : AppColors.primary,
-              fontSize: 30,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            isOverdue
-                ? 'Overdue by ${_durationLabel(elapsedDuration - reminderDuration)}'
-                : 'Last logged ${_dateLabel(event.lastPerformedAt)}',
-            maxLines: 2,
-            overflow: TextOverflow.visible,
-            style: AppTextStyles.bodyMedium.copyWith(
-              color: isOverdue ? AppColors.error : AppColors.textSecondary,
-              height: 1.2,
-            ),
+          SlidableAction(
+            onPressed: (_) => onDelete(),
+            backgroundColor: AppColors.error,
+            foregroundColor: Colors.white,
+            icon: Icons.delete_outline_rounded,
+            label: 'Delete',
+            borderRadius: BorderRadius.circular(18),
           ),
         ],
       ),
-    );
+      child: _ScrollScaleCard(
+        isScrolling: isScrolling,
+        child: InkWell(
+          onTap: onOpen,
+          borderRadius: BorderRadius.circular(18),
+          child: AnimatedContainer(
+            duration: 220.ms,
+            curve: Curves.easeOutCubic,
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              border: Border.all(
+                color: isOverdue
+                    ? AppColors.error.withValues(alpha: 0.35)
+                    : AppColors.divider,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primary.withValues(alpha: 0.05),
+                  blurRadius: 18,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    _IconBadge(icon: icon),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Text(
+                        event.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.headingMedium.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    _AnimatedActionButton(
+                      label: 'Log',
+                      icon: Icons.add_task_rounded,
+                      onPressed: onLogNow,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                AnimatedDefaultTextStyle(
+                  duration: 220.ms,
+                  curve: Curves.easeOutCubic,
+                  style: AppTextStyles.displayMedium.copyWith(
+                    color: isOverdue ? AppColors.error : AppColors.primary,
+                    fontSize: 30,
+                    fontWeight: FontWeight.w800,
+                  ),
+                  child: Text(
+                    elapsed,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (isOverdue) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    'Overdue by ${_durationLabel(elapsedDuration - reminderDuration)}',
+                    maxLines: 2,
+                    overflow: TextOverflow.visible,
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      color: AppColors.error,
+                      height: 1.2,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    )
+        .animate(key: ValueKey('event-card-${event.id}'))
+        .fadeIn(delay: (animationIndex * 45).ms, duration: 260.ms)
+        .slideY(
+          begin: 0.05,
+          end: 0,
+          delay: (animationIndex * 45).ms,
+          duration: 260.ms,
+          curve: Curves.easeOutCubic,
+        );
   }
 
   IconData get icon {
@@ -492,14 +609,6 @@ class _SinceCard extends StatelessWidget {
           : '${difference.inMinutes} minutes ago';
     }
     return 'just now';
-  }
-
-  String _dateLabel(DateTime date) {
-    final time = TimeOfDay.fromDateTime(date);
-    final hour = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod;
-    final minute = time.minute.toString().padLeft(2, '0');
-    final period = time.period == DayPeriod.am ? 'AM' : 'PM';
-    return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year} at $hour:$minute $period';
   }
 
   Duration? _reminderDuration(TrackedEvent event) {
@@ -538,107 +647,230 @@ class _SinceCard extends StatelessWidget {
 
 class _HabitCard extends StatelessWidget {
   final TrackedHabit habit;
+  final int animationIndex;
+  final bool isScrolling;
+  final VoidCallback onOpen;
   final bool completed;
   final String streakLabel;
   final VoidCallback onCheckIn;
+  final VoidCallback onDelete;
 
   const _HabitCard({
     required this.habit,
+    required this.animationIndex,
+    required this.isScrolling,
+    required this.onOpen,
     required this.completed,
     required this.streakLabel,
     required this.onCheckIn,
+    required this.onDelete,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: completed ? AppColors.softSurface : AppColors.surface,
-        border: Border.all(color: AppColors.divider),
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Row(
+    return Slidable(
+      key: ValueKey(habit.id),
+      endActionPane: ActionPane(
+        motion: const DrawerMotion(),
+        extentRatio: 0.25,
         children: [
-          Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              color: completed ? AppColors.primary : Colors.transparent,
-              shape: BoxShape.circle,
-              border: completed
-                  ? null
-                  : Border.all(color: AppColors.textPrimary, width: 2.2),
-            ),
-            child: Icon(
-              completed ? Icons.check_rounded : icon,
-              color: completed ? Colors.white : AppColors.primary,
-              size: 28,
-            ),
+          SlidableAction(
+            onPressed: (_) => onDelete(),
+            backgroundColor: AppColors.error,
+            foregroundColor: Colors.white,
+            icon: Icons.delete_outline_rounded,
+            label: 'Delete',
+            borderRadius: BorderRadius.circular(18),
           ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+        ],
+      ),
+      child: _ScrollScaleCard(
+        isScrolling: isScrolling,
+        child: InkWell(
+          onTap: onOpen,
+          borderRadius: BorderRadius.circular(18),
+          child: AnimatedContainer(
+            duration: 240.ms,
+            curve: Curves.easeOutCubic,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: completed ? AppColors.softSurface : AppColors.surface,
+              border: Border.all(
+                color: completed
+                    ? AppColors.primary.withValues(alpha: 0.18)
+                    : AppColors.divider,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primary
+                      .withValues(alpha: completed ? 0.08 : 0.05),
+                  blurRadius: completed ? 24 : 18,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Row(
               children: [
-                Text(
-                  habit.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.headingMedium.copyWith(
-                    decoration: completed ? TextDecoration.lineThrough : null,
-                    color: completed
-                        ? AppColors.textSecondary
-                        : AppColors.textPrimary,
+                AnimatedContainer(
+                  duration: 240.ms,
+                  curve: Curves.easeOutBack,
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: completed ? AppColors.primary : Colors.transparent,
+                    shape: BoxShape.circle,
+                    border: completed
+                        ? null
+                        : Border.all(color: AppColors.textPrimary, width: 2.2),
+                  ),
+                  child: AnimatedSwitcher(
+                    duration: 220.ms,
+                    transitionBuilder: (child, animation) {
+                      return ScaleTransition(
+                        scale: animation,
+                        child: FadeTransition(opacity: animation, child: child),
+                      );
+                    },
+                    child: Icon(
+                      completed ? Icons.check_rounded : icon,
+                      key: ValueKey(completed ? 'done' : habit.kind),
+                      color: completed ? Colors.white : AppColors.primary,
+                      size: 28,
+                    ),
                   ),
                 ),
-                const SizedBox(height: 6),
-                Text(
-                  habit.kind == 'break' ? 'Break habit' : 'Build habit',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    color: AppColors.textSecondary,
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      AnimatedDefaultTextStyle(
+                        duration: 180.ms,
+                        style: AppTextStyles.headingMedium.copyWith(
+                          decoration:
+                              completed ? TextDecoration.lineThrough : null,
+                          color: completed
+                              ? AppColors.textSecondary
+                              : AppColors.textPrimary,
+                        ),
+                        child: Text(
+                          habit.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        habit.kind == 'break' ? 'Break habit' : 'Build habit',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
                   ),
+                ),
+                const SizedBox(width: 12),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    _AnimatedActionButton(
+                      label: completed ? 'Done' : 'Check in',
+                      icon: completed
+                          ? Icons.check_rounded
+                          : Icons.radio_button_unchecked_rounded,
+                      onPressed: completed ? null : onCheckIn,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      streakLabel,
+                      style: AppTextStyles.captionText.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              SizedBox(
-                height: 34,
-                child: FilledButton(
-                  onPressed: completed ? null : onCheckIn,
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    textStyle: AppTextStyles.labelMedium.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  child: Text(completed ? 'Done' : 'Check in'),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                streakLabel,
-                style: AppTextStyles.captionText.copyWith(
-                  color: AppColors.textSecondary,
-                ),
-              ),
-            ],
-          ),
-        ],
+        ),
       ),
-    );
+    )
+        .animate(key: ValueKey('habit-card-${habit.id}-$completed'))
+        .fadeIn(delay: (animationIndex * 45).ms, duration: 260.ms)
+        .slideY(
+          begin: 0.05,
+          end: 0,
+          delay: (animationIndex * 45).ms,
+          duration: 260.ms,
+          curve: Curves.easeOutCubic,
+        );
   }
 
   IconData get icon {
     return habit.kind == 'break'
         ? Icons.do_not_disturb_on_rounded
         : Icons.eco_rounded;
+  }
+}
+
+class _ScrollScaleCard extends StatelessWidget {
+  final Widget child;
+  final bool isScrolling;
+
+  const _ScrollScaleCard({
+    required this.child,
+    required this.isScrolling,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedScale(
+      scale: isScrolling ? 0.975 : 1,
+      duration: isScrolling ? 140.ms : 220.ms,
+      curve: Curves.easeOutCubic,
+      child: child,
+    );
+  }
+}
+
+class _AnimatedActionButton extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final VoidCallback? onPressed;
+
+  const _AnimatedActionButton({
+    required this.label,
+    required this.icon,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedOpacity(
+      opacity: onPressed == null ? 0.62 : 1,
+      duration: 180.ms,
+      child: FilledButton.icon(
+        onPressed: onPressed,
+        icon: AnimatedSwitcher(
+          duration: 180.ms,
+          child: Icon(icon, key: ValueKey(icon), size: 18),
+        ),
+        label: AnimatedSwitcher(
+          duration: 180.ms,
+          child: Text(label, key: ValueKey(label)),
+        ),
+        style: FilledButton.styleFrom(
+          minimumSize: const Size(58, 34),
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          textStyle: AppTextStyles.labelMedium.copyWith(
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ),
+    );
   }
 }
 

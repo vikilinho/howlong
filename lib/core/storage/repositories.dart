@@ -1,11 +1,16 @@
 import 'package:isar_community/isar.dart';
 
+import '../notifications/notification_service.dart';
 import 'isar_models.dart';
 
 class EventsRepository {
   final Isar _isar;
+  final NotificationService _notifications;
 
-  EventsRepository(this._isar);
+  EventsRepository(
+    this._isar, {
+    NotificationService? notifications,
+  }) : _notifications = notifications ?? NotificationService.instance;
 
   Stream<List<TrackedEvent>> watchEvents() {
     return _isar.trackedEvents.where().watch(fireImmediately: true).map(
@@ -38,6 +43,8 @@ class EventsRepository {
     await _isar.writeTxn(() async {
       await _isar.trackedEvents.put(event);
     });
+
+    await _notifications.scheduleActionReminder(event);
   }
 
   Future<void> logNow(TrackedEvent event) async {
@@ -48,13 +55,26 @@ class EventsRepository {
         ..updatedAt = now;
       await _isar.trackedEvents.put(event);
     });
+
+    await _notifications.scheduleActionReminder(event);
+  }
+
+  Future<void> deleteEvent(int id) async {
+    await _isar.writeTxn(() async {
+      await _isar.trackedEvents.delete(id);
+    });
+    await _notifications.cancelActionReminder(id);
   }
 }
 
 class HabitsRepository {
   final Isar _isar;
+  final NotificationService _notifications;
 
-  HabitsRepository(this._isar);
+  HabitsRepository(
+    this._isar, {
+    NotificationService? notifications,
+  }) : _notifications = notifications ?? NotificationService.instance;
 
   Stream<List<TrackedHabit>> watchHabits() {
     return _isar.trackedHabits.where().watch(fireImmediately: true).map(
@@ -91,6 +111,8 @@ class HabitsRepository {
     await _isar.writeTxn(() async {
       await _isar.trackedHabits.put(habit);
     });
+
+    await _notifications.scheduleHabitReminder(habit);
   }
 
   Future<void> checkInToday(TrackedHabit habit) async {
@@ -114,5 +136,13 @@ class HabitsRepository {
       habit.updatedAt = now;
       await _isar.trackedHabits.put(habit);
     });
+  }
+
+  Future<void> deleteHabit(int id) async {
+    await _isar.writeTxn(() async {
+      await _isar.habitCheckIns.filter().habitIdEqualTo(id).deleteAll();
+      await _isar.trackedHabits.delete(id);
+    });
+    await _notifications.cancelHabitReminder(id);
   }
 }
