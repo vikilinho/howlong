@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/storage/storage_providers.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
+import '../../shared/widgets/primary_action_button.dart';
 
 enum EventCategory { car, home, health, personal }
 
@@ -236,16 +237,11 @@ class _AddEventScreenState extends ConsumerState<AddEventScreen> {
         child: Container(
           padding: const EdgeInsets.fromLTRB(24, 12, 24, 18),
           color: AppColors.background,
-          child: FilledButton.icon(
+          child: PrimaryActionButton(
             onPressed: canSave && !_isSaving ? _saveEvent : null,
-            icon: _isSaving
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.check_rounded),
-            label: Text(_isSaving ? 'Saving...' : 'Create Action'),
+            icon: Icons.check_rounded,
+            label: _isSaving ? 'Saving...' : 'Create Action',
+            isLoading: _isSaving,
           ),
         ),
       ),

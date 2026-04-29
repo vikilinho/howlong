@@ -105,10 +105,19 @@ class _HowLongAppState extends ConsumerState<HowLongApp> {
             final biometricVal =
                 ref.read(biometricEnabledProvider).valueOrNull ?? true;
             if (biometricVal) {
-              setState(() {
-                _isUnlocked = false;
-              });
-              _router.go('/lock');
+              final currentPath =
+                  _router.routeInformationProvider.value.uri.path;
+              final isLockLocation = currentPath == '/lock';
+
+              if (_isUnlocked) {
+                setState(() {
+                  _isUnlocked = false;
+                });
+              }
+
+              if (!isLockLocation) {
+                _router.go('/lock');
+              }
             }
           }
         }
@@ -123,6 +132,10 @@ class _HowLongAppState extends ConsumerState<HowLongApp> {
   }
 
   void _onAuthenticated() {
+    if (_isUnlocked) {
+      return;
+    }
+
     setState(() {
       _isUnlocked = true;
     });

@@ -19,6 +19,7 @@ class _LockScreenState extends ConsumerState<LockScreen> {
   bool _isAuthenticating = false;
   bool _authFailed = false;
   bool _biometricAvailable = true;
+  bool _autoAuthStarted = false;
 
   @override
   void initState() {
@@ -27,6 +28,11 @@ class _LockScreenState extends ConsumerState<LockScreen> {
   }
 
   Future<void> _checkAndAuthenticate() async {
+    if (_autoAuthStarted || _isAuthenticating) {
+      return;
+    }
+    _autoAuthStarted = true;
+
     final biometricService = ref.read(biometricServiceProvider);
     final isAvailable = await biometricService.isBiometricAvailable();
 
@@ -42,6 +48,10 @@ class _LockScreenState extends ConsumerState<LockScreen> {
   }
 
   Future<void> _triggerAuth() async {
+    if (_isAuthenticating) {
+      return;
+    }
+
     setState(() {
       _isAuthenticating = true;
       _authFailed = false;

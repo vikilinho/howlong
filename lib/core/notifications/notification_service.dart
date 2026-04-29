@@ -101,8 +101,8 @@ class NotificationService {
 
     await _plugin.zonedSchedule(
       _actionNotificationId(event.id),
-      'How long since ${event.title}?',
-      'It is time to log this action again.',
+      event.title,
+      'How long has it been? Log this action when you do it again.',
       _toTzDateTime(effectiveSchedule),
       _notificationDetails(),
       androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,

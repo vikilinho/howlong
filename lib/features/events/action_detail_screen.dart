@@ -5,6 +5,7 @@ import '../../core/storage/isar_models.dart';
 import '../../core/storage/storage_providers.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
+import '../../shared/widgets/primary_action_button.dart';
 
 class ActionDetailScreen extends ConsumerWidget {
   final int actionId;
@@ -48,11 +49,10 @@ class _ActionDetailContent extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final elapsedDuration = DateTime.now().difference(event.lastPerformedAt);
     final reminderDuration = _reminderDuration(event);
-    final nextReminder = reminderDuration == null
-        ? null
-        : event.lastPerformedAt.add(reminderDuration);
     final isOverdue =
         reminderDuration != null && elapsedDuration > reminderDuration;
+    final hasReminder =
+        event.reminderAfterValue != null && event.reminderAfterValue! > 0;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(24, 16, 24, 120),
@@ -81,37 +81,32 @@ class _ActionDetailContent extends ConsumerWidget {
           ),
         ),
         const SizedBox(height: 28),
-        FilledButton.icon(
+        PrimaryActionButton(
           onPressed: () async {
             final repository = await ref.read(eventsRepositoryProvider.future);
             await repository.logNow(event);
           },
-          icon: const Icon(Icons.add_task_rounded),
-          label: const Text('Log now'),
+          icon: Icons.add_task_rounded,
+          label: 'Log now',
         ),
         const SizedBox(height: 28),
-        _InfoGrid(
+        _InfoWrap(
           children: [
             _InfoTile(
               icon: Icons.category_outlined,
               label: 'Category',
               value: event.category,
             ),
-            _InfoTile(
-              icon: Icons.notifications_none_rounded,
-              label: 'Reminder',
-              value: _reminderLabel(event),
-            ),
+            if (hasReminder)
+              _InfoTile(
+                icon: Icons.notifications_none_rounded,
+                label: 'Reminder',
+                value: _reminderLabel(event),
+              ),
             _InfoTile(
               icon: Icons.history_rounded,
               label: 'Last logged',
               value: _dateTimeLabel(event.lastPerformedAt),
-            ),
-            _InfoTile(
-              icon: Icons.schedule_rounded,
-              label: 'Next reminder',
-              value:
-                  nextReminder == null ? 'Off' : _dateTimeLabel(nextReminder),
             ),
           ],
         ),
@@ -173,21 +168,40 @@ class _DetailHeader extends StatelessWidget {
   }
 }
 
-class _InfoGrid extends StatelessWidget {
+class _InfoWrap extends StatelessWidget {
   final List<Widget> children;
 
-  const _InfoGrid({required this.children});
+  const _InfoWrap({required this.children});
 
   @override
   Widget build(BuildContext context) {
-    return GridView.count(
-      crossAxisCount: 2,
-      crossAxisSpacing: 12,
-      mainAxisSpacing: 12,
-      childAspectRatio: 1.12,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      children: children,
+    final rows = <Widget>[];
+    for (var index = 0; index < children.length; index += 2) {
+      final first = children[index];
+      final second = index + 1 < children.length ? children[index + 1] : null;
+
+      rows.add(
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(child: first),
+              const SizedBox(width: 10),
+              if (second == null) const Spacer() else Expanded(child: second),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var index = 0; index < rows.length; index++) ...[
+          rows[index],
+          if (index != rows.length - 1) const SizedBox(height: 10),
+        ],
+      ],
     );
   }
 }
@@ -206,28 +220,45 @@ class _InfoTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.divider),
       ),
-      child: Column(
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: AppColors.textSecondary, size: 22),
-          const Spacer(),
-          Text(
-            label,
-            style: AppTextStyles.bodySmall,
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: AppColors.softSurface,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: AppColors.primary, size: 18),
           ),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: AppTextStyles.headingSmall.copyWith(
-              fontWeight: FontWeight.w800,
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: AppTextStyles.bodySmall,
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  value,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.headingSmall.copyWith(
+                    fontWeight: FontWeight.w800,
+                    height: 1.15,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
