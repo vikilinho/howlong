@@ -2,6 +2,7 @@
 import math
 import os
 import struct
+import sys
 import zlib
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -37,6 +38,113 @@ def write_png(path, width, height, pixels):
     )
     with open(path, "wb") as f:
         f.write(data)
+
+
+def read_png_rgba(path):
+    with open(path, "rb") as f:
+        data = f.read()
+
+    if not data.startswith(b"\x89PNG\r\n\x1a\n"):
+        raise ValueError(f"{path} is not a PNG file")
+
+    offset = 8
+    width = height = None
+    bit_depth = color_type = None
+    compressed = bytearray()
+
+    while offset < len(data):
+        length = struct.unpack(">I", data[offset : offset + 4])[0]
+        kind = data[offset + 4 : offset + 8]
+        payload = data[offset + 8 : offset + 8 + length]
+        offset += 12 + length
+
+        if kind == b"IHDR":
+            width, height, bit_depth, color_type, compression, png_filter, interlace = (
+                struct.unpack(">IIBBBBB", payload)
+            )
+            if compression != 0 or png_filter != 0 or interlace != 0:
+                raise ValueError("Only non-interlaced standard PNG files are supported")
+            if bit_depth != 8 or color_type != 6:
+                raise ValueError("Only 8-bit RGBA PNG files are supported")
+        elif kind == b"IDAT":
+            compressed.extend(payload)
+        elif kind == b"IEND":
+            break
+
+    if width is None or height is None:
+        raise ValueError("PNG is missing an IHDR chunk")
+
+    raw = zlib.decompress(bytes(compressed))
+    stride = width * 4
+    pixels = bytearray(width * height * 4)
+    previous = bytearray(stride)
+    src = 0
+
+    for y in range(height):
+        filter_type = raw[src]
+        src += 1
+        row = bytearray(raw[src : src + stride])
+        src += stride
+
+        for i in range(stride):
+            left = row[i - 4] if i >= 4 else 0
+            up = previous[i]
+            up_left = previous[i - 4] if i >= 4 else 0
+
+            if filter_type == 1:
+                row[i] = (row[i] + left) & 0xFF
+            elif filter_type == 2:
+                row[i] = (row[i] + up) & 0xFF
+            elif filter_type == 3:
+                row[i] = (row[i] + ((left + up) // 2)) & 0xFF
+            elif filter_type == 4:
+                row[i] = (row[i] + paeth(left, up, up_left)) & 0xFF
+            elif filter_type != 0:
+                raise ValueError(f"Unsupported PNG filter type {filter_type}")
+
+        start = y * stride
+        pixels[start : start + stride] = row
+        previous = row
+
+    return width, height, pixels
+
+
+def paeth(left, up, up_left):
+    p = left + up - up_left
+    pa = abs(p - left)
+    pb = abs(p - up)
+    pc = abs(p - up_left)
+    if pa <= pb and pa <= pc:
+        return left
+    if pb <= pc:
+        return up
+    return up_left
+
+
+def resize_rgba_to_square(source, src_w, src_h, size):
+    crop = min(src_w, src_h)
+    crop_x = (src_w - crop) // 2
+    crop_y = (src_h - crop) // 2
+    dst = bytearray(size * size * 4)
+
+    for y in range(size):
+        for x in range(size):
+            sx0 = crop_x + int(x * crop / size)
+            sx1 = crop_x + max(sx0 - crop_x + 1, int((x + 1) * crop / size))
+            sy0 = crop_y + int(y * crop / size)
+            sy1 = crop_y + max(sy0 - crop_y + 1, int((y + 1) * crop / size))
+            total = [0, 0, 0, 0]
+            count = 0
+            for sy in range(sy0, min(crop_y + crop, sy1)):
+                for sx in range(sx0, min(crop_x + crop, sx1)):
+                    i = (sy * src_w + sx) * 4
+                    for c in range(4):
+                        total[c] += source[i + c]
+                    count += 1
+            o = (y * size + x) * 4
+            dst[o : o + 4] = bytes(int(v / count) for v in total)
+
+    return dst
 
 
 def blend(dst, src):
@@ -238,15 +346,6 @@ def write_icon_set(source):
     for name, size in ios_sizes.items():
         write_png(os.path.join(ios, name), size, size, resize_nearest_then_downsample(source, size))
 
-    mac = os.path.join(ROOT, "macos", "Runner", "Assets.xcassets", "AppIcon.appiconset")
-    for size in [16, 32, 64, 128, 256, 512, 1024]:
-        write_png(
-            os.path.join(mac, f"app_icon_{size}.png"),
-            size,
-            size,
-            resize_nearest_then_downsample(source, size),
-        )
-
     android_sizes = {
         "mipmap-mdpi": 48,
         "mipmap-hdpi": 72,
@@ -258,49 +357,14 @@ def write_icon_set(source):
         path = os.path.join(ROOT, "android", "app", "src", "main", "res", folder, "ic_launcher.png")
         write_png(path, size, size, resize_nearest_then_downsample(source, size))
 
-    web = os.path.join(ROOT, "web")
-    write_png(os.path.join(web, "favicon.png"), 32, 32, resize_nearest_then_downsample(source, 32))
-    for name, size in {
-        "Icon-192.png": 192,
-        "Icon-maskable-192.png": 192,
-        "Icon-512.png": 512,
-        "Icon-maskable-512.png": 512,
-    }.items():
-        write_png(os.path.join(web, "icons", name), size, size, resize_nearest_then_downsample(source, size))
-
-    png_sizes = [16, 32, 48, 256]
-    images = []
-    for size in png_sizes:
-        data_path = os.path.join(ROOT, "build", f"icon_{size}.png")
-        os.makedirs(os.path.dirname(data_path), exist_ok=True)
-        data = resize_nearest_then_downsample(source, size)
-        write_png(data_path, size, size, data)
-        with open(data_path, "rb") as f:
-            images.append((size, f.read()))
-    ico = bytearray(struct.pack("<HHH", 0, 1, len(images)))
-    offset = 6 + 16 * len(images)
-    payload = bytearray()
-    for size, data in images:
-        ico.extend(
-            struct.pack(
-                "<BBBBHHII",
-                0 if size == 256 else size,
-                0 if size == 256 else size,
-                0,
-                0,
-                1,
-                32,
-                len(data),
-                offset,
-            )
-        )
-        payload.extend(data)
-        offset += len(data)
-    ico.extend(payload)
-    with open(os.path.join(ROOT, "windows", "runner", "resources", "app_icon.ico"), "wb") as f:
-        f.write(ico)
-
 
 if __name__ == "__main__":
-    write_icon_set(make_icon())
+    if len(sys.argv) > 1:
+        image_path = os.path.abspath(sys.argv[1])
+        width, height, pixels = read_png_rgba(image_path)
+        icon = resize_rgba_to_square(pixels, width, height, 1024)
+    else:
+        icon = make_icon()
+
+    write_icon_set(icon)
     print(f"Wrote {SOURCE}")
