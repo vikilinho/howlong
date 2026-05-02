@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HowLong — Privacy Policy</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    *,
+    *::before,
+    *::after {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --bg: #0a0f0d;
+      --surface: #111916;
+      --surface-alt: #162019;
+      --border: #1e2e26;
+      --text: #e8ede9;
+      --text-muted: #8fa898;
+      --accent: #34d399;
+      --accent-dim: rgba(52, 211, 153, 0.12);
+      --radius: 12px;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.7;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Header ── */
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: rgba(10, 15, 13, 0.85);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .header-inner {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .logo {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #34d399, #059669);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 16px;
+      color: #002b24;
+      flex-shrink: 0;
+    }
+
+    .header-title {
+      font-size: 18px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+
+    .header-title span {
+      color: var(--text-muted);
+      font-weight: 400;
+    }
+
+    /* ── Hero ── */
+    .hero {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 64px 24px 40px;
+    }
+
+    .hero h1 {
+      font-size: clamp(28px, 5vw, 40px);
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      line-height: 1.2;
+      margin-bottom: 12px;
+    }
+
+    .hero .effective-date {
+      color: var(--text-muted);
+      font-size: 14px;
+    }
+
+    .hero .effective-date strong {
+      color: var(--accent);
+      font-weight: 500;
+    }
+
+    /* ── Highlights ── */
+    .highlights {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 0 24px 48px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+    }
+
+    .highlight-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .highlight-card .icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      background: var(--accent-dim);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+    }
+
+    .highlight-card h3 {
+      font-size: 15px;
+      font-weight: 600;
+    }
+
+    .highlight-card p {
+      font-size: 13px;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    /* ── Content ── */
+    .content {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 0 24px 80px;
+    }
+
+    .section {
+      margin-bottom: 40px;
+    }
+
+    .section h2 {
+      font-size: 20px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      margin-bottom: 16px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .section h2 .num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      background: var(--accent-dim);
+      color: var(--accent);
+      font-size: 13px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    .section p,
+    .section li {
+      color: var(--text-muted);
+      font-size: 15px;
+      line-height: 1.75;
+    }
+
+    .section p + p {
+      margin-top: 12px;
+    }
+
+    .section ul {
+      list-style: none;
+      margin-top: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .section ul li {
+      padding-left: 24px;
+      position: relative;
+    }
+
+    .section ul li::before {
+      content: '';
+      position: absolute;
+      left: 6px;
+      top: 10px;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent);
+      opacity: 0.6;
+    }
+
+    .section strong {
+      color: var(--text);
+      font-weight: 500;
+    }
+
+    .section a {
+      color: var(--accent);
+      text-decoration: none;
+      border-bottom: 1px solid transparent;
+      transition: border-color 0.2s;
+    }
+
+    .section a:hover {
+      border-bottom-color: var(--accent);
+    }
+
+    /* ── Footer ── */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 24px;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 13px;
+    }
+
+    footer a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 480px) {
+      .hero {
+        padding-top: 40px;
+      }
+      .highlights {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="header-inner">
+      <div class="logo">H</div>
+      <div class="header-title">HowLong <span>Privacy Policy</span></div>
+    </div>
+  </header>
+
+  <div class="hero">
+    <h1>Your data stays on your&nbsp;device.</h1>
+    <p class="effective-date">Effective date: <strong>May 2, 2026</strong></p>
+  </div>
+
+  <div class="highlights">
+    <div class="highlight-card">
+      <div class="icon">🔒</div>
+      <h3>100% Offline</h3>
+      <p>All data is stored locally on your device. Nothing is sent to any server.</p>
+    </div>
+    <div class="highlight-card">
+      <div class="icon">🚫</div>
+      <h3>No Tracking</h3>
+      <p>No analytics, no advertising IDs, no third-party trackers of any kind.</p>
+    </div>
+    <div class="highlight-card">
+      <div class="icon">🛡️</div>
+      <h3>Biometric-Only</h3>
+      <p>Your biometric data never leaves the device's secure enclave.</p>
+    </div>
+  </div>
+
+  <div class="content">
+    <div class="section">
+      <h2><span class="num">1</span> Introduction</h2>
+      <p>
+        HowLong ("the App") is a personal time-tracking application that helps
+        you monitor how long it has been since meaningful events and build or
+        break habits. This Privacy Policy explains what information the App
+        accesses, how it is stored, and your rights regarding that data.
+      </p>
+    </div>
+
+    <div class="section">
+      <h2><span class="num">2</span> Information We Collect</h2>
+      <p>
+        <strong>We do not collect any personal information.</strong> The App
+        operates entirely offline, and all data you create — events, habits,
+        check-ins, and streaks — is stored exclusively in a local database on
+        your device.
+      </p>
+      <p>Specifically, the App does <strong>not</strong>:</p>
+      <ul>
+        <li>Collect your name, email address, or any account information</li>
+        <li>Transmit any data over the internet</li>
+        <li>Use analytics, crash-reporting, or advertising SDKs</li>
+        <li>Access your contacts, location, camera, or microphone</li>
+      </ul>
+    </div>
+
+    <div class="section">
+      <h2><span class="num">3</span> Biometric Authentication</h2>
+      <p>
+        The App offers an optional biometric lock (fingerprint or face
+        recognition) to protect your data. This feature uses your device's
+        built-in biometric framework (Android BiometricPrompt / iOS
+        LocalAuthentication).
+      </p>
+      <p>
+        <strong>Your biometric data is never accessed by the App.</strong>
+        Authentication is handled entirely by the operating system's secure
+        enclave. The App only receives a pass/fail result — no fingerprint
+        templates or facial data are ever stored or transmitted.
+      </p>
+    </div>
+
+    <div class="section">
+      <h2><span class="num">4</span> Local Data Storage</h2>
+      <p>
+        All app data is persisted on-device using an embedded database (Isar).
+        This data includes:
+      </p>
+      <ul>
+        <li>Event names, descriptions, and timestamps</li>
+        <li>Habit names, frequencies, and check-in history</li>
+        <li>Streak and progress calculations</li>
+        <li>App preferences (theme, biometric lock toggle)</li>
+      </ul>
+      <p>
+        This data is not backed up to any cloud service by the App itself.
+        Standard device backups (iCloud, Google Backup) may include app data
+        depending on your device settings.
+      </p>
+    </div>
+
+    <div class="section">
+      <h2><span class="num">5</span> Notifications</h2>
+      <p>
+        The App may send local push notifications to remind you of habit
+        check-ins. These notifications are scheduled entirely on-device and do
+        not require or use any external push notification service. You can
+        disable notifications at any time in your device's system settings.
+      </p>
+    </div>
+
+    <div class="section">
+      <h2><span class="num">6</span> Third-Party Services</h2>
+      <p>
+        The App does <strong>not</strong> integrate with any third-party
+        services, APIs, or SDKs that collect user data. There are no ads, no
+        social logins, and no cloud syncing.
+      </p>
+    </div>
+
+    <div class="section">
+      <h2><span class="num">7</span> Children's Privacy</h2>
+      <p>
+        The App does not knowingly collect any information from children under
+        the age of 13. Since no personal information is collected from any user,
+        the App is compliant with the Children's Online Privacy Protection Act
+        (COPPA) and similar regulations.
+      </p>
+    </div>
+
+    <div class="section">
+      <h2><span class="num">8</span> Your Rights</h2>
+      <p>
+        Because all data is stored locally on your device, you have full control
+        at all times:
+      </p>
+      <ul>
+        <li><strong>View your data</strong> — Open the App to see everything it stores</li>
+        <li><strong>Delete your data</strong> — Uninstall the App or clear its storage in device settings to permanently erase all data</li>
+        <li><strong>Revoke permissions</strong> — Disable biometric or notification access in your device settings at any time</li>
+      </ul>
+    </div>
+
+    <div class="section">
+      <h2><span class="num">9</span> Changes to This Policy</h2>
+      <p>
+        We may update this Privacy Policy from time to time. Any changes will be
+        reflected on this page with a revised effective date. We encourage you to
+        review this page periodically.
+      </p>
+    </div>
+
+    <div class="section">
+      <h2><span class="num">10</span> Contact</h2>
+      <p>
+        If you have any questions or concerns about this Privacy Policy, please
+        contact us at:
+      </p>
+      <p>
+        <a href="mailto:dvicxy@gmail.com">dvicxy@gmail.com</a>
+      </p>
+    </div>
+  </div>
+
+  <footer>
+    &copy; 2026 HowLong. All rights reserved.
+  </footer>
+</body>
+</html>
