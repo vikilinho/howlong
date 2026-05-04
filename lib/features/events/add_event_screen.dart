@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/storage/isar_models.dart';
 import '../../core/storage/storage_providers.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
@@ -12,7 +13,12 @@ enum EventCategory { car, home, health, personal }
 enum ReminderUnit { minutes, hours, days, weeks, months }
 
 class AddEventScreen extends ConsumerStatefulWidget {
-  const AddEventScreen({super.key});
+  final TrackedEvent? event;
+
+  const AddEventScreen({
+    super.key,
+    this.event,
+  });
 
   @override
   ConsumerState<AddEventScreen> createState() => _AddEventScreenState();
@@ -28,6 +34,23 @@ class _AddEventScreenState extends ConsumerState<AddEventScreen> {
   DateTime _lastPerformedAt = DateTime.now();
   bool _reminderEnabled = true;
   bool _isSaving = false;
+  bool get _isEditing => widget.event != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final event = widget.event;
+    if (event == null) return;
+
+    _titleController.text = event.title;
+    _noteController.text = event.note ?? '';
+    _reminderController.text = (event.reminderAfterValue ?? 7).toString();
+    _category = EventCategoryX.fromLabel(event.category);
+    _reminderUnit = ReminderUnitX.fromStorageValue(event.reminderAfterUnit);
+    _lastPerformedAt = event.lastPerformedAt;
+    _reminderEnabled =
+        event.reminderAfterValue != null && event.reminderAfterValue! > 0;
+  }
 
   @override
   void dispose() {
@@ -88,21 +111,51 @@ class _AddEventScreenState extends ConsumerState<AddEventScreen> {
     if (title.isEmpty || _isSaving) return;
 
     setState(() => _isSaving = true);
-    final repository = await ref.read(eventsRepositoryProvider.future);
-    final reminderValue =
-        _reminderEnabled ? int.tryParse(_reminderController.text.trim()) : null;
+    try {
+      final repository = await ref.read(eventsRepositoryProvider.future);
+      final reminderValue = _reminderEnabled
+          ? int.tryParse(_reminderController.text.trim())
+          : null;
 
-    await repository.addEvent(
-      title: title,
-      category: _category.label,
-      lastPerformedAt: _lastPerformedAt,
-      reminderAfterValue: reminderValue,
-      reminderAfterUnit: _reminderUnit.storageValue,
-      note: _noteController.text,
-    );
+      final event = widget.event;
+      if (event == null) {
+        await repository.addEvent(
+          title: title,
+          category: _category.label,
+          lastPerformedAt: _lastPerformedAt,
+          reminderAfterValue: reminderValue,
+          reminderAfterUnit: _reminderUnit.storageValue,
+          note: _noteController.text,
+        );
+      } else {
+        await repository.updateEvent(
+          event,
+          title: title,
+          category: _category.label,
+          lastPerformedAt: _lastPerformedAt,
+          reminderAfterValue: reminderValue,
+          reminderAfterUnit: _reminderUnit.storageValue,
+          note: _noteController.text,
+        );
+      }
 
-    if (mounted) {
-      _leaveScreen();
+      if (mounted) {
+        _leaveScreen();
+      }
+    } catch (error, stackTrace) {
+      debugPrint('Failed to save action "$title": $error');
+      debugPrintStack(stackTrace: stackTrace);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not save this action. Please try again.'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
     }
   }
 
@@ -123,7 +176,7 @@ class _AddEventScreenState extends ConsumerState<AddEventScreen> {
                 physics: const BouncingScrollPhysics(),
                 children: [
                   Text(
-                    'New Action',
+                    _isEditing ? 'Edit Action' : 'New Action',
                     style: AppTextStyles.displayLarge.copyWith(
                       fontSize: 38,
                       fontWeight: FontWeight.w800,
@@ -240,7 +293,11 @@ class _AddEventScreenState extends ConsumerState<AddEventScreen> {
           child: PrimaryActionButton(
             onPressed: canSave && !_isSaving ? _saveEvent : null,
             icon: Icons.check_rounded,
-            label: _isSaving ? 'Saving...' : 'Create Action',
+            label: _isSaving
+                ? 'Saving...'
+                : _isEditing
+                    ? 'Save Changes'
+                    : 'Create Action',
             isLoading: _isSaving,
           ),
         ),
@@ -271,6 +328,15 @@ extension ReminderUnitText on ReminderUnit {
   }
 }
 
+extension ReminderUnitX on ReminderUnit {
+  static ReminderUnit fromStorageValue(String value) {
+    return ReminderUnit.values.firstWhere(
+      (unit) => unit.storageValue == value,
+      orElse: () => ReminderUnit.days,
+    );
+  }
+}
+
 extension EventCategoryLabel on EventCategory {
   String get label {
     return switch (this) {
@@ -279,6 +345,15 @@ extension EventCategoryLabel on EventCategory {
       EventCategory.health => 'Health',
       EventCategory.personal => 'Personal',
     };
+  }
+}
+
+extension EventCategoryX on EventCategory {
+  static EventCategory fromLabel(String label) {
+    return EventCategory.values.firstWhere(
+      (category) => category.label.toLowerCase() == label.toLowerCase(),
+      orElse: () => EventCategory.personal,
+    );
   }
 }
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/storage/isar_models.dart';
 import '../../core/storage/storage_providers.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
@@ -12,7 +13,12 @@ enum HabitKind { build, breakHabit }
 enum HabitSchedule { daily, weekdays, custom }
 
 class AddHabitScreen extends ConsumerStatefulWidget {
-  const AddHabitScreen({super.key});
+  final TrackedHabit? habit;
+
+  const AddHabitScreen({
+    super.key,
+    this.habit,
+  });
 
   @override
   ConsumerState<AddHabitScreen> createState() => _AddHabitScreenState();
@@ -27,6 +33,27 @@ class _AddHabitScreenState extends ConsumerState<AddHabitScreen> {
   bool _reminderEnabled = true;
   TimeOfDay _reminderTime = const TimeOfDay(hour: 8, minute: 0);
   bool _isSaving = false;
+  bool get _isEditing => widget.habit != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final habit = widget.habit;
+    if (habit == null) return;
+
+    _titleController.text = habit.title;
+    _goalController.text = habit.targetDays.toString();
+    _habitKind = HabitKindX.fromStorageValue(habit.kind);
+    _schedule = HabitScheduleX.fromStorageValue(habit.schedule);
+    _reminderEnabled = habit.reminderEnabled;
+    final reminderMinutes = habit.reminderMinutesAfterMidnight;
+    if (reminderMinutes != null) {
+      _reminderTime = TimeOfDay(
+        hour: reminderMinutes ~/ 60,
+        minute: reminderMinutes % 60,
+      );
+    }
+  }
 
   @override
   void dispose() {
@@ -58,19 +85,49 @@ class _AddHabitScreenState extends ConsumerState<AddHabitScreen> {
     if (title.isEmpty || _isSaving) return;
 
     setState(() => _isSaving = true);
-    final repository = await ref.read(habitsRepositoryProvider.future);
-    await repository.addHabit(
-      title: title,
-      kind: _habitKind.storageValue,
-      schedule: _schedule.storageValue,
-      targetDays: int.tryParse(_goalController.text.trim()) ?? 30,
-      reminderEnabled: _reminderEnabled,
-      reminderMinutesAfterMidnight:
-          _reminderTime.hour * 60 + _reminderTime.minute,
-    );
+    try {
+      final repository = await ref.read(habitsRepositoryProvider.future);
+      final targetDays = int.tryParse(_goalController.text.trim()) ?? 30;
+      final reminderMinutes = _reminderTime.hour * 60 + _reminderTime.minute;
+      final habit = widget.habit;
+      if (habit == null) {
+        await repository.addHabit(
+          title: title,
+          kind: _habitKind.storageValue,
+          schedule: _schedule.storageValue,
+          targetDays: targetDays,
+          reminderEnabled: _reminderEnabled,
+          reminderMinutesAfterMidnight: reminderMinutes,
+        );
+      } else {
+        await repository.updateHabit(
+          habit,
+          title: title,
+          kind: _habitKind.storageValue,
+          schedule: _schedule.storageValue,
+          targetDays: targetDays,
+          reminderEnabled: _reminderEnabled,
+          reminderMinutesAfterMidnight: reminderMinutes,
+        );
+      }
 
-    if (mounted) {
-      _leaveScreen();
+      if (mounted) {
+        _leaveScreen();
+      }
+    } catch (error, stackTrace) {
+      debugPrint('Failed to save habit "$title": $error');
+      debugPrintStack(stackTrace: stackTrace);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not save this habit. Please try again.'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
     }
   }
 
@@ -91,7 +148,7 @@ class _AddHabitScreenState extends ConsumerState<AddHabitScreen> {
                 physics: const BouncingScrollPhysics(),
                 children: [
                   Text(
-                    'New Habit',
+                    _isEditing ? 'Edit Habit' : 'New Habit',
                     style: AppTextStyles.displayLarge.copyWith(
                       fontSize: 38,
                       fontWeight: FontWeight.w800,
@@ -213,7 +270,11 @@ class _AddHabitScreenState extends ConsumerState<AddHabitScreen> {
           child: PrimaryActionButton(
             onPressed: canSave && !_isSaving ? _saveHabit : null,
             icon: Icons.check_rounded,
-            label: _isSaving ? 'Saving...' : 'Create Habit',
+            label: _isSaving
+                ? 'Saving...'
+                : _isEditing
+                    ? 'Save Changes'
+                    : 'Create Habit',
             isLoading: _isSaving,
           ),
         ),
@@ -231,12 +292,31 @@ extension HabitKindStorage on HabitKind {
   }
 }
 
+extension HabitKindX on HabitKind {
+  static HabitKind fromStorageValue(String value) {
+    return switch (value) {
+      'break' => HabitKind.breakHabit,
+      _ => HabitKind.build,
+    };
+  }
+}
+
 extension HabitScheduleStorage on HabitSchedule {
   String get storageValue {
     return switch (this) {
       HabitSchedule.daily => 'daily',
       HabitSchedule.weekdays => 'weekdays',
       HabitSchedule.custom => 'custom',
+    };
+  }
+}
+
+extension HabitScheduleX on HabitSchedule {
+  static HabitSchedule fromStorageValue(String value) {
+    return switch (value) {
+      'weekdays' => HabitSchedule.weekdays,
+      'custom' => HabitSchedule.custom,
+      _ => HabitSchedule.daily,
     };
   }
 }

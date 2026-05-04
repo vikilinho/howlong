@@ -5,9 +5,8 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
-    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <application
-        android:label="howlong"
+        android:label="HowLong"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

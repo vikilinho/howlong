@@ -19,6 +19,12 @@ final habitsRepositoryProvider = FutureProvider<HabitsRepository>((ref) async {
   return HabitsRepository(isar);
 });
 
+final dailyLogsRepositoryProvider =
+    FutureProvider<DailyLogsRepository>((ref) async {
+  final isar = await ref.watch(isarProvider.future);
+  return DailyLogsRepository(isar);
+});
+
 final eventsProvider = StreamProvider<List<TrackedEvent>>((ref) async* {
   final repository = await ref.watch(eventsRepositoryProvider.future);
   yield* repository.watchEvents();
@@ -32,4 +38,9 @@ final habitsProvider = StreamProvider<List<TrackedHabit>>((ref) async* {
 final habitCheckInsProvider = StreamProvider<List<HabitCheckIn>>((ref) async* {
   final repository = await ref.watch(habitsRepositoryProvider.future);
   yield* repository.watchCheckIns();
+});
+
+final dailyLogsProvider = StreamProvider<List<DailyLog>>((ref) async* {
+  final repository = await ref.watch(dailyLogsRepositoryProvider.future);
+  yield* repository.watchLogs();
 });

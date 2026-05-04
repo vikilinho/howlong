@@ -17,6 +17,8 @@ class NotificationService {
       FlutterLocalNotificationsPlugin();
 
   bool _initialized = false;
+  AndroidScheduleMode _androidScheduleMode =
+      AndroidScheduleMode.inexactAllowWhileIdle;
 
   static const AndroidNotificationChannel _remindersChannel =
       AndroidNotificationChannel(
@@ -53,6 +55,7 @@ class NotificationService {
         ?.createNotificationChannel(_remindersChannel);
 
     await requestPermissions();
+    await _configureAndroidScheduleMode();
     _initialized = true;
   }
 
@@ -60,10 +63,10 @@ class NotificationService {
     if (kIsWeb) return;
 
     if (Platform.isAndroid) {
-      await _plugin
-          .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin>()
-          ?.requestNotificationsPermission();
+      final android = _plugin.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
+      await android?.requestNotificationsPermission();
+      await android?.requestExactAlarmsPermission();
       return;
     }
 
@@ -105,7 +108,7 @@ class NotificationService {
       'How long has it been? Log this action when you do it again.',
       _toTzDateTime(effectiveSchedule),
       _notificationDetails(),
-      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+      androidScheduleMode: _androidScheduleMode,
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
       payload: 'action:${event.id}',
@@ -151,7 +154,7 @@ class NotificationService {
       body,
       _nextDailyTime(hour, minute),
       _notificationDetails(),
-      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+      androidScheduleMode: _androidScheduleMode,
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
       matchDateTimeComponents: DateTimeComponents.time,
@@ -184,7 +187,7 @@ class NotificationService {
       body,
       _nextWeekdayTime(weekday, hour, minute),
       _notificationDetails(),
-      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+      androidScheduleMode: _androidScheduleMode,
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
       matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
@@ -199,6 +202,18 @@ class NotificationService {
     } catch (_) {
       tz.setLocalLocation(tz.UTC);
     }
+  }
+
+  Future<void> _configureAndroidScheduleMode() async {
+    if (!Platform.isAndroid) return;
+
+    final android = _plugin.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
+    final canScheduleExact =
+        await android?.canScheduleExactNotifications() ?? false;
+    _androidScheduleMode = canScheduleExact
+        ? AndroidScheduleMode.exactAllowWhileIdle
+        : AndroidScheduleMode.inexactAllowWhileIdle;
   }
 
   NotificationDetails _notificationDetails() {

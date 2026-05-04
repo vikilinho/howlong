@@ -1,4 +1,4 @@
-package com.howlong.howlong
+package com.victor.howlong
 
 import io.flutter.embedding.android.FlutterFragmentActivity
 

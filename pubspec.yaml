@@ -1,6 +1,6 @@
 name: howlong
 description: Track how long it's been. Build streaks. Break habits.
-version: 1.0.0+1
+version: 1.0.3+4
 publish_to: none
 
 environment:
@@ -27,14 +27,18 @@ dependencies:
   go_router: ^13.2.0
   google_fonts: ^6.2.1
   package_info_plus: ^8.0.0
+  in_app_update: ^4.2.5
 
 dev_dependencies:
   flutter_test:
+    sdk: flutter
+  integration_test:
     sdk: flutter
   flutter_lints: ^3.0.0
   build_runner: ^2.7.2
   isar_community_generator: ^3.3.2
   flutter_launcher_icons: ^0.14.3
+  local_auth_platform_interface: ^1.0.0
 
 flutter_launcher_icons:
   android: true

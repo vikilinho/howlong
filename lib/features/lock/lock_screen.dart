@@ -15,7 +15,8 @@ class LockScreen extends ConsumerStatefulWidget {
   ConsumerState<LockScreen> createState() => _LockScreenState();
 }
 
-class _LockScreenState extends ConsumerState<LockScreen> {
+class _LockScreenState extends ConsumerState<LockScreen>
+    with WidgetsBindingObserver {
   bool _isAuthenticating = false;
   bool _authFailed = false;
   bool _biometricAvailable = true;
@@ -24,7 +25,44 @@ class _LockScreenState extends ConsumerState<LockScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     Future.delayed(const Duration(milliseconds: 300), _checkAndAuthenticate);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && !_isAuthenticating) {
+      _resetAndReauthenticate();
+    }
+  }
+
+  /// Resets stale auth state and re-triggers the biometric prompt.
+  ///
+  /// This handles two cases:
+  /// 1. App resumed after the OS cancelled a mid-flight biometric dialog.
+  /// 2. The lock screen is shown again after the 30-second re-lock timeout.
+  void _resetAndReauthenticate() {
+    // Cancel any platform-side biometric prompt that may be lingering.
+    // `stopAuthentication()` is safe to call even if no auth is in progress.
+    ref.read(biometricServiceProvider).cancelAuthentication();
+
+    if (mounted) {
+      setState(() {
+        _isAuthenticating = false;
+        _authFailed = false;
+        _autoAuthStarted = false;
+      });
+      Future.delayed(
+        const Duration(milliseconds: 300),
+        _checkAndAuthenticate,
+      );
+    }
   }
 
   Future<void> _checkAndAuthenticate() async {

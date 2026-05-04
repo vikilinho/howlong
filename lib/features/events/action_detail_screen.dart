@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/storage/isar_models.dart';
 import '../../core/storage/storage_providers.dart';
@@ -62,6 +63,8 @@ class _ActionDetailContent extends ConsumerWidget {
           title: event.title,
           icon: _iconForCategory(event.category),
           onBack: () => Navigator.of(context).maybePop(),
+          onEdit: () => context.push('/events/${event.id}/edit'),
+          onDelete: () => _confirmDeleteAction(context, ref),
         ),
         const SizedBox(height: 28),
         Text(
@@ -117,17 +120,37 @@ class _ActionDetailContent extends ConsumerWidget {
       ],
     );
   }
+
+  Future<void> _confirmDeleteAction(BuildContext context, WidgetRef ref) async {
+    final confirmed = await _showDeleteDialog(
+      context: context,
+      title: 'Delete action?',
+      body: 'This removes "${event.title}" and its reminder.',
+    );
+    if (!confirmed) return;
+
+    final repository = await ref.read(eventsRepositoryProvider.future);
+    await repository.deleteEvent(event.id);
+
+    if (context.mounted) {
+      context.go('/home');
+    }
+  }
 }
 
 class _DetailHeader extends StatelessWidget {
   final String title;
   final IconData icon;
   final VoidCallback onBack;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
 
   const _DetailHeader({
     required this.title,
     required this.icon,
     required this.onBack,
+    required this.onEdit,
+    required this.onDelete,
   });
 
   @override
@@ -135,13 +158,38 @@ class _DetailHeader extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        IconButton(
-          onPressed: onBack,
-          icon: const Icon(Icons.arrow_back_rounded),
-          style: IconButton.styleFrom(
-            backgroundColor: AppColors.surface,
-            foregroundColor: AppColors.textPrimary,
-          ),
+        Row(
+          children: [
+            IconButton(
+              tooltip: 'Back',
+              onPressed: onBack,
+              icon: const Icon(Icons.arrow_back_rounded),
+              style: IconButton.styleFrom(
+                backgroundColor: AppColors.surface,
+                foregroundColor: AppColors.textPrimary,
+              ),
+            ),
+            const Spacer(),
+            IconButton(
+              tooltip: 'Edit action',
+              onPressed: onEdit,
+              icon: const Icon(Icons.edit_rounded),
+              style: IconButton.styleFrom(
+                backgroundColor: AppColors.surface,
+                foregroundColor: AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(width: 8),
+            IconButton(
+              tooltip: 'Delete action',
+              onPressed: onDelete,
+              icon: const Icon(Icons.delete_outline_rounded),
+              style: IconButton.styleFrom(
+                backgroundColor: AppColors.error.withValues(alpha: 0.08),
+                foregroundColor: AppColors.error,
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 24),
         Container(
@@ -385,4 +433,35 @@ String _dateTimeLabel(DateTime date) {
   final minute = time.minute.toString().padLeft(2, '0');
   final period = time.period == DayPeriod.am ? 'AM' : 'PM';
   return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year} $hour:$minute $period';
+}
+
+Future<bool> _showDeleteDialog({
+  required BuildContext context,
+  required String title,
+  required String body,
+}) async {
+  final result = await showDialog<bool>(
+    context: context,
+    builder: (context) {
+      return AlertDialog(
+        title: Text(title),
+        content: Text(body),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.error,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      );
+    },
+  );
+  return result ?? false;
 }

@@ -41,3 +41,16 @@ class HabitCheckIn {
   late int habitId;
   late DateTime checkedAt;
 }
+
+@collection
+class DailyLog {
+  Id id = Isar.autoIncrement;
+
+  late DateTime day;
+  late String body;
+  late String mood;
+  late String energy;
+
+  late DateTime createdAt;
+  late DateTime updatedAt;
+}

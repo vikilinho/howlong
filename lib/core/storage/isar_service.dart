@@ -22,6 +22,7 @@ class IsarService {
         TrackedEventSchema,
         TrackedHabitSchema,
         HabitCheckInSchema,
+        DailyLogSchema,
       ],
       name: 'howlong',
       directory: directory.path,

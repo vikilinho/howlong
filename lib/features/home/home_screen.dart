@@ -4,7 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../app.dart';
 import '../../core/storage/isar_models.dart';
+import '../../core/storage/repositories.dart';
 import '../../core/storage/storage_providers.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
@@ -19,12 +21,24 @@ class HomeScreen extends ConsumerStatefulWidget {
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   int _currentIndex = 0;
   bool _isScrolling = false;
+  bool _updateCheckStarted = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_updateCheckStarted) return;
+    _updateCheckStarted = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkForAppUpdate();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final events = ref.watch(eventsProvider);
     final habits = ref.watch(habitsProvider);
     final checkIns = ref.watch(habitCheckInsProvider);
+    final dailyLogs = ref.watch(dailyLogsProvider);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -46,9 +60,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ),
               const SizedBox(height: 34),
               ...switch (_currentIndex) {
-                0 => _todayTab(context, events, habits, checkIns),
+                0 => _todayTab(context, events, habits, checkIns, dailyLogs),
                 1 => _eventsTab(context, events),
-                _ => _habitsTab(context, habits, checkIns),
+                2 => _habitsTab(context, habits, checkIns),
+                _ => _logsTab(context, dailyLogs),
               },
             ].animate(interval: 45.ms).fadeIn(duration: 200.ms).slideY(
                   begin: 0.02,
@@ -78,17 +93,34 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             selectedIcon: Icon(Icons.check_circle_rounded),
             label: 'HABITS',
           ),
+          NavigationDestination(
+            icon: Icon(Icons.edit_note_outlined),
+            selectedIcon: Icon(Icons.edit_note_rounded),
+            label: 'LOGS',
+          ),
         ],
       ),
       floatingActionButton: _currentIndex == 0
           ? null
           : FloatingActionButton.extended(
-              tooltip: _currentIndex == 1 ? 'Add action' : 'Add habit',
+              tooltip: switch (_currentIndex) {
+                1 => 'Add action',
+                2 => 'Add habit',
+                _ => 'Add daily log',
+              },
               onPressed: () => context.push(
-                _currentIndex == 1 ? '/events/add' : '/habits/add',
+                switch (_currentIndex) {
+                  1 => '/events/add',
+                  2 => '/habits/add',
+                  _ => '/logs/add',
+                },
               ),
               icon: const Icon(Icons.add_rounded),
-              label: Text(_currentIndex == 1 ? 'Action' : 'Habit'),
+              label: Text(switch (_currentIndex) {
+                1 => 'Action',
+                2 => 'Habit',
+                _ => 'Log',
+              }),
             ),
     );
   }
@@ -105,11 +137,55 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return false;
   }
 
+  Future<void> _checkForAppUpdate() async {
+    final service = await ref.read(updateServiceProvider.future);
+    final result = await service.checkForUpdateIfDue();
+    if (!mounted || result == null || !result.hasUpdate) return;
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Update available'),
+          content: Text(
+            result.currentVersionLabel == null
+                ? 'A newer version of HowLong is ready. Updating keeps reminders, fixes, and improvements flowing.'
+                : 'A newer version of HowLong is ready. Version ${result.currentVersionLabel} is available now.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Later'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                final messenger = ScaffoldMessenger.of(this.context);
+                Navigator.of(context).pop();
+                final started = await service.performUpdate();
+                if (!mounted || started) return;
+                messenger.showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      'Could not start the update right now. Please try again later.',
+                    ),
+                  ),
+                );
+              },
+              child: const Text('Update now'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   List<Widget> _todayTab(
     BuildContext context,
     AsyncValue<List<TrackedEvent>> events,
     AsyncValue<List<TrackedHabit>> habits,
     AsyncValue<List<HabitCheckIn>> checkIns,
+    AsyncValue<List<DailyLog>> dailyLogs,
   ) {
     return [
       Text(
@@ -130,6 +206,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         ),
       ),
       const SizedBox(height: 30),
+      _DailyLogPreview(
+        logs: dailyLogs,
+        onAdd: () => context.push('/logs/add'),
+      ),
+      const SizedBox(height: 34),
       _AddRow(
         label: 'Add action',
         onPressed: () => context.push('/events/add'),
@@ -156,6 +237,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         isScrolling: _isScrolling,
         onOpen: _openHabit,
         hasCheckedInToday: _hasCheckedInToday,
+        streakBroken: _streakBroken,
         streakLabel: _streakLabel,
         onCheckIn: _checkInHabit,
         onDelete: _deleteHabit,
@@ -226,9 +308,40 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         isScrolling: _isScrolling,
         onOpen: _openHabit,
         hasCheckedInToday: _hasCheckedInToday,
+        streakBroken: _streakBroken,
         streakLabel: _streakLabel,
         onCheckIn: _checkInHabit,
         onDelete: _deleteHabit,
+      ),
+    ];
+  }
+
+  List<Widget> _logsTab(
+    BuildContext context,
+    AsyncValue<List<DailyLog>> dailyLogs,
+  ) {
+    return [
+      Text(
+        'Daily Logs',
+        style: AppTextStyles.displayLarge.copyWith(
+          fontSize: 38,
+          fontWeight: FontWeight.w800,
+          height: 1.05,
+        ),
+      ),
+      const SizedBox(height: 10),
+      Text(
+        'Short notes that add context to your actions and habits.',
+        style: AppTextStyles.bodyLarge.copyWith(
+          color: AppColors.textSecondary,
+          fontSize: 17,
+          height: 1.35,
+        ),
+      ),
+      const SizedBox(height: 30),
+      _DailyLogsList(
+        logs: dailyLogs,
+        onDelete: _deleteDailyLog,
       ),
     ];
   }
@@ -261,6 +374,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     await repository.deleteHabit(habit.id);
   }
 
+  Future<void> _deleteDailyLog(DailyLog log) async {
+    final repository = await ref.read(dailyLogsRepositoryProvider.future);
+    await repository.deleteLog(log.id);
+  }
+
   bool _hasCheckedInToday(TrackedHabit habit, List<HabitCheckIn> checkIns) {
     final now = DateTime.now();
     return checkIns.any((checkIn) {
@@ -271,7 +389,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     });
   }
 
+  bool _streakBroken(TrackedHabit habit, List<HabitCheckIn> checkIns) {
+    final habitCheckIns =
+        checkIns.where((checkIn) => checkIn.habitId == habit.id).toList();
+    return isStreakBroken(habitCheckIns, habit.schedule);
+  }
+
   String _streakLabel(TrackedHabit habit, List<HabitCheckIn> checkIns) {
+    if (_streakBroken(habit, checkIns)) {
+      return 'Streak ended';
+    }
+
     final days = checkIns
         .where((checkIn) => checkIn.habitId == habit.id)
         .map((checkIn) => DateTime(
@@ -391,6 +519,8 @@ class _HabitsList extends StatelessWidget {
   final void Function(TrackedHabit habit) onOpen;
   final bool Function(TrackedHabit habit, List<HabitCheckIn> checkIns)
       hasCheckedInToday;
+  final bool Function(TrackedHabit habit, List<HabitCheckIn> checkIns)
+      streakBroken;
   final String Function(TrackedHabit habit, List<HabitCheckIn> checkIns)
       streakLabel;
   final Future<void> Function(TrackedHabit habit) onCheckIn;
@@ -402,6 +532,7 @@ class _HabitsList extends StatelessWidget {
     required this.isScrolling,
     required this.onOpen,
     required this.hasCheckedInToday,
+    required this.streakBroken,
     required this.streakLabel,
     required this.onCheckIn,
     required this.onDelete,
@@ -432,6 +563,7 @@ class _HabitsList extends StatelessWidget {
                 isScrolling: isScrolling,
                 onOpen: () => onOpen(visibleItems[index]),
                 completed: hasCheckedInToday(visibleItems[index], logs),
+                streakBroken: streakBroken(visibleItems[index], logs),
                 streakLabel: streakLabel(visibleItems[index], logs),
                 onCheckIn: () => onCheckIn(visibleItems[index]),
                 onDelete: () => onDelete(visibleItems[index]),
@@ -443,6 +575,378 @@ class _HabitsList extends StatelessWidget {
       },
       error: (error, _) => _ErrorPanel(message: error.toString()),
       loading: () => const _LoadingPanel(),
+    );
+  }
+}
+
+class _DailyLogPreview extends StatelessWidget {
+  final AsyncValue<List<DailyLog>> logs;
+  final VoidCallback onAdd;
+
+  const _DailyLogPreview({
+    required this.logs,
+    required this.onAdd,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return logs.when(
+      data: (items) {
+        final today = DateTime.now();
+        final todayOnly = DateTime(today.year, today.month, today.day);
+        final todayLog = items.where((log) => log.day == todayOnly).firstOrNull;
+
+        return InkWell(
+          onTap: onAdd,
+          borderRadius: BorderRadius.circular(20),
+          child: Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: AppColors.darkCard,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primary.withValues(alpha: 0.10),
+                  blurRadius: 24,
+                  offset: const Offset(0, 14),
+                ),
+              ],
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: const Icon(
+                    Icons.edit_note_rounded,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        todayLog == null ? 'Add today’s log' : 'Today’s log',
+                        style: AppTextStyles.headingSmall.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        todayLog?.body ??
+                            'Write a short note about what affected your habits today.',
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: Colors.white.withValues(alpha: 0.72),
+                          height: 1.35,
+                        ),
+                      ),
+                      if (todayLog != null) ...[
+                        const SizedBox(height: 12),
+                        _LogMetaRow(log: todayLog, light: true),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Icon(
+                  todayLog == null
+                      ? Icons.add_rounded
+                      : Icons.arrow_forward_rounded,
+                  color: Colors.white.withValues(alpha: 0.78),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+      error: (error, _) => _ErrorPanel(message: error.toString()),
+      loading: () => const _LoadingPanel(),
+    );
+  }
+}
+
+class _DailyLogsList extends StatelessWidget {
+  final AsyncValue<List<DailyLog>> logs;
+  final Future<void> Function(DailyLog log) onDelete;
+
+  const _DailyLogsList({
+    required this.logs,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return logs.when(
+      data: (items) {
+        if (items.isEmpty) {
+          return const _EmptyPanel(
+            icon: Icons.edit_note_rounded,
+            title: 'No daily logs yet',
+            body:
+                'Add a short daily note to track the context behind your progress.',
+          );
+        }
+
+        return Column(
+          children: [
+            for (var index = 0; index < items.length; index++) ...[
+              _DailyLogCard(
+                log: items[index],
+                onDelete: () => onDelete(items[index]),
+              ),
+              const SizedBox(height: 12),
+            ],
+          ],
+        );
+      },
+      error: (error, _) => _ErrorPanel(message: error.toString()),
+      loading: () => const _LoadingPanel(),
+    );
+  }
+}
+
+class _DailyLogCard extends StatelessWidget {
+  final DailyLog log;
+  final VoidCallback onDelete;
+
+  const _DailyLogCard({
+    required this.log,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Slidable(
+      key: ValueKey(log.id),
+      endActionPane: ActionPane(
+        motion: const DrawerMotion(),
+        extentRatio: 0.25,
+        children: [
+          SlidableAction(
+            onPressed: (_) => onDelete(),
+            backgroundColor: AppColors.error,
+            foregroundColor: Colors.white,
+            icon: Icons.delete_outline_rounded,
+            label: 'Delete',
+            borderRadius: BorderRadius.circular(18),
+          ),
+        ],
+      ),
+      child: Container(
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          border: Border.all(color: AppColors.divider),
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.primary.withValues(alpha: 0.05),
+              blurRadius: 18,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const _IconBadge(icon: Icons.edit_note_rounded),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Text(
+                    _dayLabel(log.day),
+                    style: AppTextStyles.headingMedium.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Text(
+              log.body,
+              maxLines: 4,
+              overflow: TextOverflow.ellipsis,
+              style: AppTextStyles.bodyLarge.copyWith(height: 1.35),
+            ),
+            const SizedBox(height: 14),
+            _LogMetaRow(log: log),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LogMetaRow extends StatelessWidget {
+  final DailyLog log;
+  final bool light;
+
+  const _LogMetaRow({
+    required this.log,
+    this.light = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final moodColors = _metaColors(_MetaKind.mood, log.mood, light: light);
+    final energyColors =
+        _metaColors(_MetaKind.energy, log.energy, light: light);
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        _MetaChip(
+          icon: _moodIcon(log.mood),
+          label: log.mood,
+          foreground: moodColors.foreground,
+          background: moodColors.background,
+        ),
+        _MetaChip(
+          icon: Icons.bolt_rounded,
+          label: '${log.energy} energy',
+          foreground: energyColors.foreground,
+          background: energyColors.background,
+        ),
+      ],
+    );
+  }
+
+  IconData _moodIcon(String mood) {
+    return switch (mood) {
+      'Good' => Icons.sentiment_satisfied_alt_rounded,
+      'Low' => Icons.sentiment_dissatisfied_rounded,
+      _ => Icons.sentiment_neutral_rounded,
+    };
+  }
+}
+
+enum _MetaKind { mood, energy }
+
+class _MetaColors {
+  final Color foreground;
+  final Color background;
+
+  const _MetaColors({
+    required this.foreground,
+    required this.background,
+  });
+}
+
+_MetaColors _metaColors(_MetaKind kind, String value, {required bool light}) {
+  if (light) {
+    if (kind == _MetaKind.energy) {
+      return switch (value) {
+        'High' => const _MetaColors(
+            foreground: Color(0xFFFFF1D6),
+            background: Color(0x33F59E0B),
+          ),
+        'Low' => const _MetaColors(
+            foreground: Color(0xFFEFF4FB),
+            background: Color(0x3364748B),
+          ),
+        _ => const _MetaColors(
+            foreground: Color(0xFFE0F2FE),
+            background: Color(0x330284C7),
+          ),
+      };
+    }
+
+    return switch (value) {
+      'Good' => const _MetaColors(
+          foreground: Color(0xFFDCFCE7),
+          background: Color(0x3316A34A),
+        ),
+      'Low' => const _MetaColors(
+          foreground: Color(0xFFFFE4E6),
+          background: Color(0x33DC2626),
+        ),
+      _ => const _MetaColors(
+          foreground: Color(0xFFFEF9C3),
+          background: Color(0x33FDE047),
+        ),
+    };
+  }
+
+  if (kind == _MetaKind.energy) {
+    return switch (value) {
+      'High' => const _MetaColors(
+          foreground: Color(0xFF7A3D00),
+          background: Color(0xFFFFF1D6),
+        ),
+      'Low' => const _MetaColors(
+          foreground: Color(0xFF334155),
+          background: Color(0xFFEFF4FB),
+        ),
+      _ => const _MetaColors(
+          foreground: Color(0xFF075985),
+          background: Color(0xFFE0F2FE),
+        ),
+    };
+  }
+
+  return switch (value) {
+    'Good' => const _MetaColors(
+        foreground: Color(0xFF166534),
+        background: Color(0xFFDCFCE7),
+      ),
+    'Low' => const _MetaColors(
+        foreground: Color(0xFF991B1B),
+        background: Color(0xFFFEE2E2),
+      ),
+    _ => const _MetaColors(
+        foreground: Color(0xFF5B4B00),
+        background: Color(0xFFFEF9C3),
+      ),
+  };
+}
+
+class _MetaChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color foreground;
+  final Color background;
+
+  const _MetaChip({
+    required this.icon,
+    required this.label,
+    required this.foreground,
+    required this.background,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: foreground),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: AppTextStyles.captionText.copyWith(
+              color: foreground,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -651,6 +1155,7 @@ class _HabitCard extends StatelessWidget {
   final bool isScrolling;
   final VoidCallback onOpen;
   final bool completed;
+  final bool streakBroken;
   final String streakLabel;
   final VoidCallback onCheckIn;
   final VoidCallback onDelete;
@@ -661,6 +1166,7 @@ class _HabitCard extends StatelessWidget {
     required this.isScrolling,
     required this.onOpen,
     required this.completed,
+    required this.streakBroken,
     required this.streakLabel,
     required this.onCheckIn,
     required this.onDelete,
@@ -668,6 +1174,19 @@ class _HabitCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isBuildHabit = habit.kind != 'break';
+    final showCompletedTreatment = completed && !isBuildHabit;
+    final buttonLabel = completed
+        ? (isBuildHabit ? 'Logged' : 'Done')
+        : streakBroken
+            ? 'Restart'
+            : (isBuildHabit ? 'Log' : 'Check in');
+    final buttonIcon = isBuildHabit
+        ? Icons.eco_rounded
+        : completed
+            ? Icons.check_rounded
+            : Icons.radio_button_unchecked_rounded;
+
     return Slidable(
       key: ValueKey(habit.id),
       endActionPane: ActionPane(
@@ -718,9 +1237,11 @@ class _HabitCard extends StatelessWidget {
                   width: 56,
                   height: 56,
                   decoration: BoxDecoration(
-                    color: completed ? AppColors.primary : Colors.transparent,
+                    color: showCompletedTreatment
+                        ? AppColors.primary
+                        : Colors.transparent,
                     shape: BoxShape.circle,
-                    border: completed
+                    border: showCompletedTreatment
                         ? null
                         : Border.all(color: AppColors.textPrimary, width: 2.2),
                   ),
@@ -733,9 +1254,13 @@ class _HabitCard extends StatelessWidget {
                       );
                     },
                     child: Icon(
-                      completed ? Icons.check_rounded : icon,
-                      key: ValueKey(completed ? 'done' : habit.kind),
-                      color: completed ? Colors.white : AppColors.primary,
+                      showCompletedTreatment ? Icons.check_rounded : icon,
+                      key: ValueKey(
+                        showCompletedTreatment ? 'done' : habit.kind,
+                      ),
+                      color: showCompletedTreatment
+                          ? Colors.white
+                          : AppColors.primary,
                       size: 28,
                     ),
                   ),
@@ -748,8 +1273,9 @@ class _HabitCard extends StatelessWidget {
                       AnimatedDefaultTextStyle(
                         duration: 180.ms,
                         style: AppTextStyles.headingMedium.copyWith(
-                          decoration:
-                              completed ? TextDecoration.lineThrough : null,
+                          decoration: showCompletedTreatment
+                              ? TextDecoration.lineThrough
+                              : null,
                           color: completed
                               ? AppColors.textSecondary
                               : AppColors.textPrimary,
@@ -777,10 +1303,8 @@ class _HabitCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     _AnimatedActionButton(
-                      label: completed ? 'Done' : 'Check in',
-                      icon: completed
-                          ? Icons.check_rounded
-                          : Icons.radio_button_unchecked_rounded,
+                      label: buttonLabel,
+                      icon: buttonIcon,
                       onPressed: completed ? null : onCheckIn,
                     ),
                     const SizedBox(height: 8),
@@ -971,4 +1495,13 @@ class _IconBadge extends StatelessWidget {
       child: Icon(icon, color: AppColors.primary),
     );
   }
+}
+
+String _dayLabel(DateTime date) {
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final target = DateTime(date.year, date.month, date.day);
+  if (target == today) return 'Today';
+  if (target == today.subtract(const Duration(days: 1))) return 'Yesterday';
+  return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
 }

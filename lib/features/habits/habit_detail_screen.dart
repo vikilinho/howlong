@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/storage/isar_models.dart';
+import '../../core/storage/repositories.dart';
 import '../../core/storage/storage_providers.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
+import '../../shared/widgets/primary_action_button.dart';
 
 class HabitDetailScreen extends ConsumerWidget {
   final int habitId;
@@ -58,7 +61,11 @@ class _HabitDetailContent extends ConsumerWidget {
         .toList()
       ..sort((a, b) => b.checkedAt.compareTo(a.checkedAt));
     final checkedInToday = _hasCheckedInToday(habitCheckIns);
-    final streak = _streakCount(habitCheckIns);
+    final streakBroken = isStreakBroken(habitCheckIns, habit.schedule);
+    final activeCheckIns =
+        streakBroken ? const <HabitCheckIn>[] : habitCheckIns;
+    final streak = _streakCount(activeCheckIns);
+    final needsRestart = streakBroken && !checkedInToday;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(24, 16, 24, 120),
@@ -70,24 +77,67 @@ class _HabitDetailContent extends ConsumerWidget {
               ? Icons.do_not_disturb_on_rounded
               : Icons.eco_rounded,
           onBack: () => Navigator.of(context).maybePop(),
+          onEdit: () => context.push('/habits/${habit.id}/edit'),
+          onDelete: () => _confirmDeleteHabit(context, ref),
         ),
-        const SizedBox(height: 28),
+        const SizedBox(height: 22),
         Text(
-          streak == 1 ? '1 day' : '$streak days',
+          needsRestart
+              ? 'Restart streak'
+              : streak == 0
+                  ? 'Start today'
+                  : streak == 1
+                      ? '1 day strong'
+                      : '$streak days strong',
           style: AppTextStyles.streakHero.copyWith(
             color: AppColors.primary,
-            fontSize: 46,
+            fontSize: 36,
           ),
         ),
         const SizedBox(height: 8),
         Text(
-          streak == 0 ? 'No streak yet' : 'Current streak',
+          needsRestart
+              ? 'Your previous streak ended. Start again with a clean count.'
+              : habit.kind == 'break'
+                  ? 'Keep protecting the pattern you are breaking.'
+                  : 'Keep building the rhythm one check-in at a time.',
           style: AppTextStyles.bodyLarge.copyWith(
             color: AppColors.textSecondary,
           ),
         ),
+        const SizedBox(height: 32),
+        Row(
+          children: [
+            Expanded(
+              child: _SummaryCard(
+                icon: Icons.flag_rounded,
+                label: 'Current goal',
+                value: '${habit.targetDays} days',
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: _SummaryCard(
+                icon: Icons.done_all_rounded,
+                label: 'Total logged',
+                value: '${activeCheckIns.length} times',
+              ),
+            ),
+          ],
+        ),
         const SizedBox(height: 28),
-        FilledButton.icon(
+        _GoalProgressCard(
+          streak: streak,
+          target: habit.targetDays,
+        ),
+        const SizedBox(height: 18),
+        _DetailInfoCard(
+          type: habit.kind == 'break' ? 'Break habit' : 'Build habit',
+          schedule: _scheduleLabel(habit.schedule),
+          reminder: _reminderLabel(habit),
+        ),
+        const SizedBox(height: 26),
+        PrimaryActionButton(
           onPressed: checkedInToday
               ? null
               : () async {
@@ -95,50 +145,31 @@ class _HabitDetailContent extends ConsumerWidget {
                       await ref.read(habitsRepositoryProvider.future);
                   await repository.checkInToday(habit);
                 },
-          icon: Icon(checkedInToday
-              ? Icons.check_rounded
-              : Icons.radio_button_unchecked_rounded),
-          label: Text(checkedInToday ? 'Done today' : 'Check in today'),
-        ),
-        const SizedBox(height: 28),
-        _InfoGrid(
-          children: [
-            _InfoTile(
-              icon: Icons.flag_outlined,
-              label: 'Goal',
-              value: '${habit.targetDays} days',
-            ),
-            _InfoTile(
-              icon: Icons.spa_outlined,
-              label: 'Type',
-              value: habit.kind == 'break' ? 'Break habit' : 'Build habit',
-            ),
-            _InfoTile(
-              icon: Icons.event_repeat_rounded,
-              label: 'Schedule',
-              value: _scheduleLabel(habit.schedule),
-            ),
-            _InfoTile(
-              icon: Icons.notifications_none_rounded,
-              label: 'Reminder',
-              value: _reminderLabel(habit),
-            ),
-            _InfoTile(
-              icon: Icons.fact_check_outlined,
-              label: 'Total check-ins',
-              value: '${habitCheckIns.length}',
-            ),
-            _InfoTile(
-              icon: Icons.history_rounded,
-              label: 'Last check-in',
-              value: habitCheckIns.isEmpty
-                  ? 'None yet'
-                  : _dateTimeLabel(habitCheckIns.first.checkedAt),
-            ),
-          ],
+          icon: checkedInToday ? Icons.check_rounded : Icons.add_task_rounded,
+          label: checkedInToday
+              ? 'Done today'
+              : needsRestart
+                  ? 'Restart streak'
+                  : 'Log today',
         ),
       ],
     );
+  }
+
+  Future<void> _confirmDeleteHabit(BuildContext context, WidgetRef ref) async {
+    final confirmed = await _showDeleteDialog(
+      context: context,
+      title: 'Delete habit?',
+      body: 'This removes "${habit.title}" and its check-ins.',
+    );
+    if (!confirmed) return;
+
+    final repository = await ref.read(habitsRepositoryProvider.future);
+    await repository.deleteHabit(habit.id);
+
+    if (context.mounted) {
+      context.go('/home');
+    }
   }
 }
 
@@ -146,11 +177,15 @@ class _DetailHeader extends StatelessWidget {
   final String title;
   final IconData icon;
   final VoidCallback onBack;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
 
   const _DetailHeader({
     required this.title,
     required this.icon,
     required this.onBack,
+    required this.onEdit,
+    required this.onDelete,
   });
 
   @override
@@ -158,13 +193,38 @@ class _DetailHeader extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        IconButton(
-          onPressed: onBack,
-          icon: const Icon(Icons.arrow_back_rounded),
-          style: IconButton.styleFrom(
-            backgroundColor: AppColors.surface,
-            foregroundColor: AppColors.textPrimary,
-          ),
+        Row(
+          children: [
+            IconButton(
+              tooltip: 'Back',
+              onPressed: onBack,
+              icon: const Icon(Icons.arrow_back_rounded),
+              style: IconButton.styleFrom(
+                backgroundColor: AppColors.surface,
+                foregroundColor: AppColors.textPrimary,
+              ),
+            ),
+            const Spacer(),
+            IconButton(
+              tooltip: 'Edit habit',
+              onPressed: onEdit,
+              icon: const Icon(Icons.edit_rounded),
+              style: IconButton.styleFrom(
+                backgroundColor: AppColors.surface,
+                foregroundColor: AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(width: 8),
+            IconButton(
+              tooltip: 'Delete habit',
+              onPressed: onDelete,
+              icon: const Icon(Icons.delete_outline_rounded),
+              style: IconButton.styleFrom(
+                backgroundColor: AppColors.error.withValues(alpha: 0.08),
+                foregroundColor: AppColors.error,
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 24),
         Container(
@@ -191,31 +251,12 @@ class _DetailHeader extends StatelessWidget {
   }
 }
 
-class _InfoGrid extends StatelessWidget {
-  final List<Widget> children;
-
-  const _InfoGrid({required this.children});
-
-  @override
-  Widget build(BuildContext context) {
-    return GridView.count(
-      crossAxisCount: 2,
-      crossAxisSpacing: 12,
-      mainAxisSpacing: 12,
-      childAspectRatio: 1.12,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      children: children,
-    );
-  }
-}
-
-class _InfoTile extends StatelessWidget {
+class _SummaryCard extends StatelessWidget {
   final IconData icon;
   final String label;
   final String value;
 
-  const _InfoTile({
+  const _SummaryCard({
     required this.icon,
     required this.label,
     required this.value,
@@ -224,29 +265,202 @@ class _InfoTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      constraints: const BoxConstraints(minHeight: 138),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: AppColors.divider),
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: AppColors.textSecondary, size: 22),
-          const Spacer(),
-          Text(label, style: AppTextStyles.bodySmall),
-          const SizedBox(height: 4),
+          Icon(icon, color: AppColors.textSecondary, size: 24),
+          const SizedBox(height: 26),
+          Text(
+            label,
+            style: AppTextStyles.bodyLarge.copyWith(
+              color: AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 8),
           Text(
             value,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: AppTextStyles.headingSmall.copyWith(
+            style: AppTextStyles.displayMedium.copyWith(
+              fontSize: 30,
               fontWeight: FontWeight.w800,
+              height: 1.12,
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+class _GoalProgressCard extends StatelessWidget {
+  final int streak;
+  final int target;
+
+  const _GoalProgressCard({
+    required this.streak,
+    required this.target,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final rhythmTarget = _rhythmTarget(streak: streak, target: target);
+    final progress =
+        rhythmTarget > 0 ? (streak / rhythmTarget).clamp(0.0, 1.0) : 0.0;
+    final percent = (progress * 100).round();
+
+    return Container(
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        color: AppColors.darkCard,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Consistency rhythm',
+            style: AppTextStyles.labelLarge.copyWith(
+              color: Colors.white.withValues(alpha: 0.86),
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            '$percent%',
+            style: AppTextStyles.streakHero.copyWith(
+              color: Colors.white,
+              fontSize: 54,
+              height: 1,
+            ),
+          ),
+          const SizedBox(height: 18),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: LinearProgressIndicator(
+              value: progress,
+              minHeight: 10,
+              backgroundColor: Colors.white.withValues(alpha: 0.18),
+              valueColor: AlwaysStoppedAnimation<Color>(
+                AppColors.accent.withValues(alpha: 0.92),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            '$streak of $rhythmTarget days in this rhythm',
+            style: AppTextStyles.bodySmall.copyWith(
+              color: Colors.white.withValues(alpha: 0.68),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '$rhythmTarget of $target day goal',
+            style: AppTextStyles.bodySmall.copyWith(
+              color: Colors.white.withValues(alpha: 0.68),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DetailInfoCard extends StatelessWidget {
+  final String type;
+  final String schedule;
+  final String reminder;
+
+  const _DetailInfoCard({
+    required this.type,
+    required this.schedule,
+    required this.reminder,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.divider),
+      ),
+      child: Column(
+        children: [
+          _DetailInfoRow(
+            icon: Icons.spa_outlined,
+            label: 'Type',
+            value: type,
+          ),
+          const Divider(height: 24, color: AppColors.divider),
+          _DetailInfoRow(
+            icon: Icons.event_repeat_rounded,
+            label: 'Schedule',
+            value: schedule,
+          ),
+          const Divider(height: 24, color: AppColors.divider),
+          _DetailInfoRow(
+            icon: Icons.notifications_none_rounded,
+            label: 'Reminder',
+            value: reminder,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DetailInfoRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+
+  const _DetailInfoRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(
+            color: AppColors.softSurface,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(icon, color: AppColors.primary, size: 20),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            label,
+            style: AppTextStyles.bodyMedium.copyWith(
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Flexible(
+          child: Text(
+            value,
+            textAlign: TextAlign.right,
+            style: AppTextStyles.headingSmall.copyWith(
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -301,6 +515,18 @@ int _streakCount(List<HabitCheckIn> checkIns) {
   return streak;
 }
 
+int _rhythmTarget({
+  required int streak,
+  required int target,
+}) {
+  if (target <= 0) return 0;
+  if (streak >= target) return target;
+
+  final completedWeeks = streak ~/ 7;
+  final nextCheckpoint = (completedWeeks + 1) * 7;
+  return nextCheckpoint.clamp(1, target);
+}
+
 String _scheduleLabel(String schedule) {
   return switch (schedule) {
     'weekdays' => 'Weekdays',
@@ -320,10 +546,33 @@ String _reminderLabel(TrackedHabit habit) {
   return '$hour:${minute.toString().padLeft(2, '0')} $period';
 }
 
-String _dateTimeLabel(DateTime date) {
-  final time = TimeOfDay.fromDateTime(date);
-  final hour = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod;
-  final minute = time.minute.toString().padLeft(2, '0');
-  final period = time.period == DayPeriod.am ? 'AM' : 'PM';
-  return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year} $hour:$minute $period';
+Future<bool> _showDeleteDialog({
+  required BuildContext context,
+  required String title,
+  required String body,
+}) async {
+  final result = await showDialog<bool>(
+    context: context,
+    builder: (context) {
+      return AlertDialog(
+        title: Text(title),
+        content: Text(body),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.error,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      );
+    },
+  );
+  return result ?? false;
 }

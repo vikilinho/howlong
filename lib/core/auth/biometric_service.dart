@@ -3,8 +3,11 @@ import 'package:local_auth/local_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class BiometricService {
-  final LocalAuthentication _localAuth = LocalAuthentication();
+  final LocalAuthentication _localAuth;
   List<BiometricType> _availableBiometrics = [];
+
+  BiometricService({LocalAuthentication? localAuth})
+      : _localAuth = localAuth ?? LocalAuthentication();
 
   Future<bool> isBiometricAvailable() async {
     try {
@@ -31,11 +34,27 @@ class BiometricService {
           stickyAuth: true,
         ),
       );
-    } on PlatformException catch (_) {
+    } on PlatformException catch (e) {
+      // If a previous auth session is still active, cancel it and retry once.
+      if (e.code == 'auth_in_progress') {
+        await cancelAuthentication();
+        return false;
+      }
       // Handles notEnrolled, lockedOut, permanentlyLockedOut, etc.
       return false;
     } catch (e) {
       return false;
+    }
+  }
+
+  /// Cancels any in-flight platform biometric prompt.
+  ///
+  /// Safe to call even when no authentication is in progress.
+  Future<void> cancelAuthentication() async {
+    try {
+      await _localAuth.stopAuthentication();
+    } catch (_) {
+      // stopAuthentication() may throw on platforms that don't support it.
     }
   }
 
