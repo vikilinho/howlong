@@ -1,6 +1,6 @@
 name: howlong
 description: Track how long it's been. Build streaks. Break habits.
-version: 1.0.3+4
+version: 1.0.5+6
 publish_to: none
 
 environment:

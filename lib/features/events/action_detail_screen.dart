@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/feedback/app_haptics.dart';
 import '../../core/storage/isar_models.dart';
 import '../../core/storage/storage_providers.dart';
 import '../../core/theme/app_colors.dart';
@@ -182,7 +183,10 @@ class _DetailHeader extends StatelessWidget {
             const SizedBox(width: 8),
             IconButton(
               tooltip: 'Delete action',
-              onPressed: onDelete,
+              onPressed: () {
+                AppHaptics.destructive();
+                onDelete();
+              },
               icon: const Icon(Icons.delete_outline_rounded),
               style: IconButton.styleFrom(
                 backgroundColor: AppColors.error.withValues(alpha: 0.08),
@@ -456,7 +460,10 @@ Future<bool> _showDeleteDialog({
               backgroundColor: AppColors.error,
               foregroundColor: Colors.white,
             ),
-            onPressed: () => Navigator.of(context).pop(true),
+            onPressed: () {
+              AppHaptics.destructive();
+              Navigator.of(context).pop(true);
+            },
             child: const Text('Delete'),
           ),
         ],

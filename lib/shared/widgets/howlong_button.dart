@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+
+import '../../core/feedback/app_haptics.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 
@@ -34,6 +36,7 @@ class HowLongButton extends StatelessWidget {
     final bool isDisabled = onTap == null;
     final Color effectiveBgColor = backgroundColor ?? AppColors.buttonText;
     final Color effectiveFgColor = foregroundColor ?? Colors.white;
+    final effectiveOnTap = onTap;
 
     Widget buttonContent = Row(
       mainAxisAlignment: MainAxisAlignment.center,
@@ -69,7 +72,12 @@ class HowLongButton extends StatelessWidget {
             : BorderSide.none,
       ),
       child: InkWell(
-        onTap: isLoading ? null : onTap,
+        onTap: isLoading || effectiveOnTap == null
+            ? null
+            : () {
+                AppHaptics.confirm();
+                effectiveOnTap();
+              },
         borderRadius: BorderRadius.circular(12),
         splashColor: AppColors.accent.withValues(alpha: 0.20),
         child: Container(

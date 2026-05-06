@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/feedback/app_haptics.dart';
 import '../../core/storage/isar_models.dart';
 import '../../core/storage/storage_providers.dart';
 import '../../core/theme/app_colors.dart';
@@ -69,6 +70,7 @@ class _AddEventScreenState extends ConsumerState<AddEventScreen> {
   }
 
   Future<void> _pickLastPerformedDate() async {
+    AppHaptics.tap();
     final picked = await showDatePicker(
       context: context,
       initialDate: _lastPerformedAt,
@@ -89,6 +91,7 @@ class _AddEventScreenState extends ConsumerState<AddEventScreen> {
   }
 
   Future<void> _pickLastPerformedTime() async {
+    AppHaptics.tap();
     final picked = await showTimePicker(
       context: context,
       initialTime: TimeOfDay.fromDateTime(_lastPerformedAt),
@@ -440,7 +443,10 @@ class _CategoryChip extends StatelessWidget {
       ),
       label: Text(label),
       selected: selected,
-      onSelected: (_) => onSelected(),
+      onSelected: (_) {
+        AppHaptics.tap();
+        onSelected();
+      },
       selectedColor: AppColors.primary,
       backgroundColor: AppColors.surface,
       labelStyle: AppTextStyles.labelLarge.copyWith(
@@ -522,7 +528,10 @@ class _PickerRow extends StatelessWidget {
       color: AppColors.surface,
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
-        onTap: onTap,
+        onTap: () {
+          AppHaptics.tap();
+          onTap();
+        },
         borderRadius: BorderRadius.circular(14),
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 2),
@@ -624,7 +633,10 @@ class _ReminderThresholdTile extends StatelessWidget {
               ),
               Switch(
                 value: enabled,
-                onChanged: onToggle,
+                onChanged: (value) {
+                  AppHaptics.tap();
+                  onToggle(value);
+                },
               ),
             ],
           ),
@@ -657,6 +669,7 @@ class _ReminderThresholdTile extends StatelessWidget {
                     ],
                     onChanged: (value) {
                       if (value != null) {
+                        AppHaptics.tap();
                         onUnitChanged(value);
                       }
                     },

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/feedback/app_haptics.dart';
 import '../../core/storage/isar_models.dart';
 import '../../core/storage/storage_providers.dart';
 import '../../core/theme/app_colors.dart';
@@ -72,6 +73,7 @@ class _AddDailyLogScreenState extends ConsumerState<AddDailyLogScreen> {
   }
 
   Future<void> _pickDay() async {
+    AppHaptics.tap();
     final picked = await showDatePicker(
       context: context,
       initialDate: _day,
@@ -320,7 +322,10 @@ class _LogChoiceChip extends StatelessWidget {
       selected: selected,
       avatar: Icon(icon, size: 18, color: foreground),
       label: Text(label),
-      onSelected: (_) => onSelected(),
+      onSelected: (_) {
+        AppHaptics.tap();
+        onSelected();
+      },
       selectedColor: colors.selectedBackground,
       backgroundColor: colors.background,
       labelStyle: AppTextStyles.labelLarge.copyWith(

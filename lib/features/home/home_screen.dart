@@ -5,6 +5,7 @@ import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app.dart';
+import '../../core/feedback/app_haptics.dart';
 import '../../core/storage/isar_models.dart';
 import '../../core/storage/repositories.dart';
 import '../../core/storage/storage_providers.dart';
@@ -76,7 +77,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
-        onDestinationSelected: (index) => setState(() => _currentIndex = index),
+        onDestinationSelected: (index) {
+          AppHaptics.tap();
+          setState(() => _currentIndex = index);
+        },
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.calendar_today_outlined),
@@ -108,13 +112,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 2 => 'Add habit',
                 _ => 'Add daily log',
               },
-              onPressed: () => context.push(
-                switch (_currentIndex) {
-                  1 => '/events/add',
-                  2 => '/habits/add',
-                  _ => '/logs/add',
-                },
-              ),
+              onPressed: () {
+                AppHaptics.confirm();
+                context.push(
+                  switch (_currentIndex) {
+                    1 => '/events/add',
+                    2 => '/habits/add',
+                    _ => '/logs/add',
+                  },
+                );
+              },
               icon: const Icon(Icons.add_rounded),
               label: Text(switch (_currentIndex) {
                 1 => 'Action',
@@ -597,7 +604,10 @@ class _DailyLogPreview extends StatelessWidget {
         final todayLog = items.where((log) => log.day == todayOnly).firstOrNull;
 
         return InkWell(
-          onTap: onAdd,
+          onTap: () {
+            AppHaptics.tap();
+            onAdd();
+          },
           borderRadius: BorderRadius.circular(20),
           child: Container(
             padding: const EdgeInsets.all(18),
@@ -733,7 +743,10 @@ class _DailyLogCard extends StatelessWidget {
         extentRatio: 0.25,
         children: [
           SlidableAction(
-            onPressed: (_) => onDelete(),
+            onPressed: (_) {
+              AppHaptics.destructive();
+              onDelete();
+            },
             backgroundColor: AppColors.error,
             foregroundColor: Colors.white,
             icon: Icons.delete_outline_rounded,
@@ -983,7 +996,10 @@ class _SinceCard extends StatelessWidget {
         extentRatio: 0.25,
         children: [
           SlidableAction(
-            onPressed: (_) => onDelete(),
+            onPressed: (_) {
+              AppHaptics.destructive();
+              onDelete();
+            },
             backgroundColor: AppColors.error,
             foregroundColor: Colors.white,
             icon: Icons.delete_outline_rounded,
@@ -995,7 +1011,10 @@ class _SinceCard extends StatelessWidget {
       child: _ScrollScaleCard(
         isScrolling: isScrolling,
         child: InkWell(
-          onTap: onOpen,
+          onTap: () {
+            AppHaptics.tap();
+            onOpen();
+          },
           borderRadius: BorderRadius.circular(18),
           child: AnimatedContainer(
             duration: 220.ms,
@@ -1194,7 +1213,10 @@ class _HabitCard extends StatelessWidget {
         extentRatio: 0.25,
         children: [
           SlidableAction(
-            onPressed: (_) => onDelete(),
+            onPressed: (_) {
+              AppHaptics.destructive();
+              onDelete();
+            },
             backgroundColor: AppColors.error,
             foregroundColor: Colors.white,
             icon: Icons.delete_outline_rounded,
@@ -1206,7 +1228,10 @@ class _HabitCard extends StatelessWidget {
       child: _ScrollScaleCard(
         isScrolling: isScrolling,
         child: InkWell(
-          onTap: onOpen,
+          onTap: () {
+            AppHaptics.tap();
+            onOpen();
+          },
           borderRadius: BorderRadius.circular(18),
           child: AnimatedContainer(
             duration: 240.ms,
@@ -1377,7 +1402,12 @@ class _AnimatedActionButton extends StatelessWidget {
       opacity: onPressed == null ? 0.62 : 1,
       duration: 180.ms,
       child: FilledButton.icon(
-        onPressed: onPressed,
+        onPressed: onPressed == null
+            ? null
+            : () {
+                AppHaptics.confirm();
+                onPressed!();
+              },
         icon: AnimatedSwitcher(
           duration: 180.ms,
           child: Icon(icon, key: ValueKey(icon), size: 18),

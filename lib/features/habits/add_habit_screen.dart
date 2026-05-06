@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/feedback/app_haptics.dart';
 import '../../core/storage/isar_models.dart';
 import '../../core/storage/storage_providers.dart';
 import '../../core/theme/app_colors.dart';
@@ -63,6 +64,7 @@ class _AddHabitScreenState extends ConsumerState<AddHabitScreen> {
   }
 
   Future<void> _pickReminderTime() async {
+    AppHaptics.tap();
     final picked = await showTimePicker(
       context: context,
       initialTime: _reminderTime,
@@ -419,7 +421,10 @@ class _ChoiceTile extends StatelessWidget {
         color: selected ? AppColors.primary : AppColors.surface,
         borderRadius: BorderRadius.circular(18),
         child: InkWell(
-          onTap: onTap,
+          onTap: () {
+            AppHaptics.tap();
+            onTap();
+          },
           borderRadius: BorderRadius.circular(18),
           child: Container(
             constraints: const BoxConstraints(minHeight: 116),
@@ -479,7 +484,10 @@ class _ScheduleChip extends StatelessWidget {
     return ChoiceChip(
       label: Text(label),
       selected: selected,
-      onSelected: (_) => onSelected(),
+      onSelected: (_) {
+        AppHaptics.tap();
+        onSelected();
+      },
       selectedColor: AppColors.primary,
       backgroundColor: AppColors.surface,
       labelStyle: AppTextStyles.labelLarge.copyWith(
@@ -512,6 +520,13 @@ class _ReminderTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final openTimePicker = enabled
+        ? () {
+            AppHaptics.tap();
+            onTimeTap();
+          }
+        : null;
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -521,47 +536,64 @@ class _ReminderTile extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Container(
-            width: 46,
-            height: 46,
-            decoration: BoxDecoration(
-              color: AppColors.softSurface,
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: const Icon(
-              Icons.notifications_none_rounded,
-              color: AppColors.primary,
-            ),
-          ),
-          const SizedBox(width: 14),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Check-in reminder',
-                  style: AppTextStyles.headingSmall.copyWith(
-                    fontWeight: FontWeight.w800,
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: openTimePicker,
+                borderRadius: BorderRadius.circular(16),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 46,
+                        height: 46,
+                        decoration: BoxDecoration(
+                          color: AppColors.softSurface,
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: const Icon(
+                          Icons.notifications_none_rounded,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Check-in reminder',
+                              style: AppTextStyles.headingSmall.copyWith(
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const SizedBox(height: 5),
+                            Text(
+                              time.format(context),
+                              style: AppTextStyles.bodyMedium.copyWith(
+                                color: enabled
+                                    ? AppColors.primary
+                                    : AppColors.textSecondary,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 5),
-                GestureDetector(
-                  onTap: enabled ? onTimeTap : null,
-                  child: Text(
-                    time.format(context),
-                    style: AppTextStyles.bodyMedium.copyWith(
-                      color:
-                          enabled ? AppColors.primary : AppColors.textSecondary,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
           Switch(
             value: enabled,
-            onChanged: onToggle,
+            onChanged: (value) {
+              AppHaptics.tap();
+              onToggle(value);
+            },
           ),
         ],
       ),

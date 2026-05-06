@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/feedback/app_haptics.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 
@@ -20,6 +21,7 @@ class PrimaryActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDisabled = onPressed == null;
+    final effectiveOnPressed = onPressed;
 
     return AnimatedOpacity(
       duration: const Duration(milliseconds: 160),
@@ -30,7 +32,12 @@ class PrimaryActionButton extends StatelessWidget {
         shadowColor: AppColors.primary.withValues(alpha: 0.22),
         elevation: isDisabled ? 0 : 8,
         child: InkWell(
-          onTap: isLoading ? null : onPressed,
+          onTap: isLoading || effectiveOnPressed == null
+              ? null
+              : () {
+                  AppHaptics.confirm();
+                  effectiveOnPressed();
+                },
           borderRadius: BorderRadius.circular(18),
           splashColor: Colors.white.withValues(alpha: 0.12),
           highlightColor: Colors.white.withValues(alpha: 0.06),
